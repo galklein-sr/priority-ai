@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
-import { buildSchemaReference } from "@/lib/erp-schema";
+import { buildSchemaReference, ENTITY_ALIASES } from "@/lib/erp-schema";
 
 // ─── API Call Logger ────────────────────────────────────────────────────────
 const LOG_FILE = path.join(process.cwd(), "logs", "priority-api-calls.jsonl");
@@ -26,10 +26,14 @@ interface ApiLogEntry {
     orderby?: string;
     expand?: string;
   };
-  status: "success" | "error";
+  status: "success" | "error" | "warning";
   recordCount?: number;
   errorMessage?: string;
+  warningMessage?: string;
   durationMs: number;
+  resolvedEntity?: string;
+  alternativesTried?: string[];
+  missingFields?: string[];
 }
 
 function appendApiLog(entry: ApiLogEntry) {
@@ -71,41 +75,74 @@ const PRIORITY_CREDS = Buffer.from(
   `${process.env.PRIORITY_USERNAME || "6AAE9884207242A0B371BE5C7B5DB639"}:${process.env.PRIORITY_PASSWORD || "PAT"}`
 ).toString("base64");
 
-async function queryPriorityERP(params: {
+interface QueryResult {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+  resolvedEntity: string;
+  alternativesTried: string[];
+}
+
+type QueryParams = {
   entity: string;
   filter?: string;
   select?: string;
   top?: number;
   orderby?: string;
   expand?: string;
-}) {
-  const url = new URL(`${PRIORITY_BASE_URL}/${params.entity}`);
+};
 
+function buildErpUrl(entity: string, params: QueryParams): string {
+  const url = new URL(`${PRIORITY_BASE_URL}/${entity}`);
   if (params.filter) url.searchParams.set("$filter", params.filter);
   if (params.select) url.searchParams.set("$select", params.select);
-  url.searchParams.set(
-    "$top",
-    String(Math.min(Math.max(params.top ?? 20, 1), 50))
-  );
+  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 20, 1), 50)));
   if (params.orderby) url.searchParams.set("$orderby", params.orderby);
   if (params.expand) url.searchParams.set("$expand", params.expand);
+  return url.toString();
+}
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Basic ${PRIORITY_CREDS}`,
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
+async function queryPriorityERP(
+  params: QueryParams,
+  onAlternative?: (failedEntity: string, nextEntity: string, errorMsg: string) => void
+): Promise<QueryResult> {
+  // Build candidate list: requested entity first, then any registered aliases.
+  // Key lookup is upper-cased so AI output casing doesn't matter.
+  const aliases = ENTITY_ALIASES[params.entity.toUpperCase()] ?? [];
+  const candidates = [params.entity, ...aliases];
 
-  if (!res.ok) {
+  let lastError: Error = new Error("Unknown error");
+  const tried: string[] = [];
+
+  for (const entityName of candidates) {
+    const res = await fetch(buildErpUrl(entityName, params), {
+      headers: {
+        Authorization: `Basic ${PRIORITY_CREDS}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      return { data: await res.json(), resolvedEntity: entityName, alternativesTried: tried };
+    }
+
     const body = await res.text().catch(() => "");
-    throw new Error(
-      `Priority API ${res.status}: ${body.slice(0, 300) || res.statusText}`
-    );
+    const errMsg = `Priority API ${res.status} (${entityName}): ${body.slice(0, 300) || res.statusText}`;
+
+    // 4xx = bad request / auth issue — no point trying aliases
+    if (res.status < 500) throw new Error(errMsg);
+
+    // 5xx = server/entity error — try next alias
+    lastError = new Error(errMsg);
+    tried.push(entityName);
+
+    const nextIdx = candidates.indexOf(entityName) + 1;
+    if (nextIdx < candidates.length) {
+      onAlternative?.(entityName, candidates[nextIdx], errMsg);
+    }
   }
 
-  return res.json();
+  throw lastError;
 }
 
 const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת Priority ERP — מערכת תכנון משאבי ארגון מובילה המשמשת חברת הפצת מזון/עופות ישראלית.
@@ -328,12 +365,72 @@ export async function POST(req: NextRequest) {
             };
 
             try {
-              const data = await queryPriorityERP(input);
+              const { data, resolvedEntity, alternativesTried } = await queryPriorityERP(
+                input,
+                (failedEntity, nextEntity, errMsg) => {
+                  send({
+                    type: "status",
+                    message: `"${failedEntity}" → 5xx, trying "${nextEntity}" instead`,
+                  });
+                  appendApiLog({
+                    ...logBase,
+                    status: "error",
+                    errorMessage: `[fallback] ${errMsg} → trying ${nextEntity}`,
+                    durationMs: Date.now() - callStart,
+                    resolvedEntity: failedEntity,
+                    alternativesTried,
+                  });
+                }
+              );
 
-              const count = Array.isArray(data?.value) ? data.value.length : 0;
+              const records: unknown[] = Array.isArray(data?.value)
+                ? data.value
+                : [];
+              const count = records.length;
+
+              // ── Detect schema fields missing from actual API response ──────
+              const missingFields: string[] = [];
+              if (input.select && count > 0) {
+                const requestedFields = input.select
+                  .split(",")
+                  .map((f) => f.trim())
+                  .filter(Boolean);
+                const actualKeys = Object.keys(
+                  records[0] as Record<string, unknown>
+                );
+                missingFields.push(
+                  ...requestedFields.filter((f) => !actualKeys.includes(f))
+                );
+                if (missingFields.length > 0) {
+                  const warning = `Fields not returned by API (may not exist in this environment): ${missingFields.join(", ")}`;
+                  appendApiLog({
+                    ...logBase,
+                    status: "warning",
+                    warningMessage: warning,
+                    recordCount: count,
+                    durationMs: Date.now() - callStart,
+                    resolvedEntity,
+                    alternativesTried,
+                    missingFields,
+                  });
+                }
+              }
+
+              // Build status suffix: show if a fallback entity was used
+              const resolvedSuffix =
+                resolvedEntity !== input.entity
+                  ? ` (resolved via "${resolvedEntity}")`
+                  : alternativesTried.length > 0
+                  ? ` (after ${alternativesTried.length} fallback(s))`
+                  : "";
+
               send({
                 type: "status",
-                message: `${entityLabel} → ${count} records`,
+                message:
+                  `${entityLabel} → ${count} records${resolvedSuffix}` +
+                  (missingFields.length > 0
+                    ? ` ⚠ missing fields: ${missingFields.join(", ")}`
+                    : ""),
               });
 
               appendApiLog({
@@ -341,19 +438,33 @@ export async function POST(req: NextRequest) {
                 status: "success",
                 recordCount: count,
                 durationMs: Date.now() - callStart,
+                resolvedEntity,
+                alternativesTried,
               });
+
+              // Inform model: which entity was actually used + any absent fields
+              const entityNote =
+                resolvedEntity !== input.entity
+                  ? `\n\n[NOTE: entity "${input.entity}" returned a server error — data was fetched from "${resolvedEntity}" instead.]`
+                  : "";
+              const schemaWarning =
+                missingFields.length > 0
+                  ? `\n\n[SCHEMA WARNING: the following fields were requested but not returned by the API — they likely do not exist for this entity in this environment: ${missingFields.join(", ")}. Do not reference or display these fields.]`
+                  : "";
 
               allMessages.push({
                 role: "tool",
                 tool_call_id: toolCall.id,
-                content: JSON.stringify(data),
+                content: JSON.stringify(data) + entityNote + schemaWarning,
               });
             } catch (error) {
               const errorMsg =
                 error instanceof Error ? error.message : String(error);
+              const aliases = ENTITY_ALIASES[input.entity.toUpperCase()] ?? [];
+              const totalTried = 1 + aliases.length;
               send({
                 type: "status",
-                message: `Error querying ${input.entity}`,
+                message: `Failed querying "${input.entity}" (tried ${totalTried} entity name(s))`,
               });
 
               appendApiLog({
@@ -361,12 +472,13 @@ export async function POST(req: NextRequest) {
                 status: "error",
                 errorMessage: errorMsg,
                 durationMs: Date.now() - callStart,
+                alternativesTried: aliases,
               });
 
               allMessages.push({
                 role: "tool",
                 tool_call_id: toolCall.id,
-                content: `Query failed: ${errorMsg}`,
+                content: `Query failed for "${input.entity}"${aliases.length > 0 ? ` and alternatives [${aliases.join(", ")}]` : ""}: ${errorMsg}`,
               });
             }
           }

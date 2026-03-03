@@ -259,6 +259,63 @@ const ACCBAL: EntityDef = {
   ],
 };
 
+// ─── Entity alias / fallback map ─────────────────────────────────────────────
+//
+// When the AI requests an entity that returns a 5xx error, the system tries
+// each alias in order until one succeeds.  Keys are upper-cased at runtime so
+// casing in AI output doesn't matter.
+//
+// Sources: Priority ERP naming conventions + live OData entity list at
+//   https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/moftov/
+// Postman collection reference: https://documenter.getpostman.com/view/30274649/2sB3QRmRt4
+
+export const ENTITY_ALIASES: Record<string, string[]> = {
+  // ── Products / Inventory ─────────────────────────────────────────────────
+  // "PART" was the old entity name; Priority renamed it to "LOGPART"
+  PART:             ['LOGPART'],
+  PARTS:            ['LOGPART'],
+  PRODUCTS:         ['LOGPART'],
+  ITEMS:            ['LOGPART'],
+  INVENTORY:        ['LOGPART'],
+
+  // ── Sales Invoices ───────────────────────────────────────────────────────
+  // Priority has several invoice forms; AINVOICES is the most common tax-invoice
+  INVOICES:         ['AINVOICES', 'CINVOICES'],
+  AINVOICES:        ['INVOICES',  'CINVOICES'],
+  CINVOICES:        ['INVOICES',  'AINVOICES'],
+  TAXINVOICES:      ['AINVOICES', 'INVOICES'],
+
+  // ── Delivery / Shipping Documents ────────────────────────────────────────
+  DOCUMENTS:        ['DOCUMENTS_D'],
+  DELIVERIES:       ['DOCUMENTS_D'],
+  DELIVERYNOTES:    ['DOCUMENTS_D'],
+  TDELIVERIES:      ['DOCUMENTS_D'],
+  SHIPMENTS:        ['DOCUMENTS_D'],
+  DELIVERY:         ['DOCUMENTS_D'],
+
+  // ── Purchase Orders ──────────────────────────────────────────────────────
+  PURCHORDERS:      ['PORDERS'],
+  PURCHASEORDERS:   ['PORDERS'],
+  PURCHASE_ORDERS:  ['PORDERS'],
+  PURCHORD:         ['PORDERS'],
+
+  // ── Customers ────────────────────────────────────────────────────────────
+  CLIENTS:          ['CUSTOMERS'],
+  CLIENT:           ['CUSTOMERS'],
+  CUSTOMER:         ['CUSTOMERS'],
+
+  // ── Suppliers / Vendors ──────────────────────────────────────────────────
+  VENDOR:           ['SUPPLIERS'],
+  VENDORS:          ['SUPPLIERS'],
+  SUPPLIER:         ['SUPPLIERS'],
+
+  // ── Account Balances ─────────────────────────────────────────────────────
+  BALANCE:          ['ACCBAL'],
+  BALANCES:         ['ACCBAL'],
+  ACCOUNTBALANCE:   ['ACCBAL'],
+  ACCBALANCES:      ['ACCBAL'],
+};
+
 // ─── Exported registry ────────────────────────────────────────────────────────
 
 export const ERP_ENTITIES: Record<string, EntityDef> = {
