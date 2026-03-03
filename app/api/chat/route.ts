@@ -1,4 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { AzureOpenAI } from "openai";
+import type OpenAI from "openai";
 import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
@@ -39,26 +40,26 @@ function appendApiLog(entry: ApiLogEntry) {
   }
 }
 
-function extractUserQuestion(messages: Anthropic.MessageParam[]): string {
-  // Walk backwards to find the last user-turn text
+type SimpleMessage = { role: "user" | "assistant"; content: string };
+
+function extractUserQuestion(messages: SimpleMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (msg.role === "user") {
-      if (typeof msg.content === "string") return msg.content.trim();
-      if (Array.isArray(msg.content)) {
-        const textBlock = msg.content.find(
-          (b): b is Anthropic.TextBlockParam => b.type === "text"
-        );
-        if (textBlock) return textBlock.text.trim();
-      }
-    }
+    if (msg.role === "user") return msg.content.trim();
   }
   return "unknown";
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const client = new AzureOpenAI({
+  endpoint:
+    process.env.AZURE_OPENAI_ENDPOINT ||
+    "https://giatec-resource.cognitiveservices.azure.com",
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiVersion:
+    process.env.AZURE_OPENAI_API_VERSION || "2024-05-01-preview",
+  deployment:
+    process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-5.2-chat",
 });
 
 const PRIORITY_BASE_URL =
@@ -154,55 +155,56 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 - Sort newest first: orderby="CURDATE desc"
 - Specific customer's orders: filter="CUSTNAME eq '400204'"`;
 
-const tools: Anthropic.Tool[] = [
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
-    name: "query_priority_erp",
-    description:
-      "Query the Priority ERP system for live business data. Use this for any question about customers, sales orders, products, suppliers, purchase orders, or other business entities. Always use this tool rather than guessing.",
-    input_schema: {
-      type: "object",
-      properties: {
-        entity: {
-          type: "string",
-          description:
-            "The entity/table to query. Options: CUSTOMERS, ORDERS, PART, SUPPLIERS, PORDERS, DOCUMENTS_D, ACCBAL, INVOICES",
+    type: "function",
+    function: {
+      name: "query_priority_erp",
+      description:
+        "Query the Priority ERP system for live business data. Use this for any question about customers, sales orders, products, suppliers, purchase orders, or other business entities. Always use this tool rather than guessing.",
+      parameters: {
+        type: "object",
+        properties: {
+          entity: {
+            type: "string",
+            description:
+              "The entity/table to query. Options: CUSTOMERS, ORDERS, PART, SUPPLIERS, PORDERS, DOCUMENTS_D, ACCBAL, INVOICES",
+          },
+          filter: {
+            type: "string",
+            description:
+              "OData $filter expression. Examples: \"BOOLCLOSED eq null\" or \"CURDATE ge 2026-01-01T00:00:00+02:00\" or \"CUSTNAME eq '400204'\" or \"contains(CUSTDES,'term')\"",
+          },
+          select: {
+            type: "string",
+            description:
+              "Comma-separated field names to return (improves performance). Example: \"ORDNAME,CUSTNAME,CDES,CURDATE,TOTPRICE,CODE,ORDSTATUSDES\"",
+          },
+          top: {
+            type: "number",
+            description:
+              "Maximum number of records to return (1-50). Defaults to 20.",
+          },
+          orderby: {
+            type: "string",
+            description:
+              "Sort expression. Examples: \"CURDATE desc\" or \"CUSTDES asc\" or \"TOTPRICE desc\"",
+          },
+          expand: {
+            type: "string",
+            description:
+              "Related entities to expand/include (OData $expand). Example: \"ORDERITEMS_SUBFORM\"",
+          },
         },
-        filter: {
-          type: "string",
-          description:
-            "OData $filter expression. Examples: \"BOOLCLOSED eq null\" or \"CURDATE ge 2026-01-01T00:00:00+02:00\" or \"CUSTNAME eq '400204'\" or \"contains(CUSTDES,'term')\"",
-        },
-        select: {
-          type: "string",
-          description:
-            "Comma-separated field names to return (improves performance). Example: \"ORDNAME,CUSTNAME,CDES,CURDATE,TOTPRICE,CODE,ORDSTATUSDES\"",
-        },
-        top: {
-          type: "number",
-          description:
-            "Maximum number of records to return (1-50). Defaults to 20.",
-        },
-        orderby: {
-          type: "string",
-          description:
-            "Sort expression. Examples: \"CURDATE desc\" or \"CUSTDES asc\" or \"TOTPRICE desc\"",
-        },
-        expand: {
-          type: "string",
-          description:
-            "Related entities to expand/include (OData $expand). Example: \"ORDERITEMS_SUBFORM\"",
-        },
+        required: ["entity"],
+        additionalProperties: false,
       },
-      required: ["entity"],
-      additionalProperties: false,
     },
   },
 ];
 
 export async function POST(req: NextRequest) {
-  const { messages } = (await req.json()) as {
-    messages: Anthropic.MessageParam[];
-  };
+  const { messages } = (await req.json()) as { messages: SimpleMessage[] };
 
   const encoder = new TextEncoder();
 
@@ -219,45 +221,92 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        let currentMessages: Anthropic.MessageParam[] = messages;
+        // Build conversation: system prompt first, then user/assistant history
+        const allMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+          [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...messages.map((m) => ({ role: m.role, content: m.content })),
+          ];
+
         let iterations = 0;
         const MAX_ITERATIONS = 8;
 
         while (iterations < MAX_ITERATIONS) {
           iterations++;
 
-          // Use streaming for real-time text delivery
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const msgStream = client.messages.stream({
-            model: "claude-sonnet-4-6",
-            max_tokens: 8192,
-            thinking: { type: "adaptive" } as any, // adaptive thinking — SDK types lag behind
-            system: SYSTEM_PROMPT,
+          // Stream the response from Azure OpenAI
+          // model must match the deployment name (AzureOpenAI still requires it)
+          const openaiStream = await client.chat.completions.create({
+            model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-5.2-chat",
+            stream: true,
+            messages: allMessages,
             tools,
-            messages: currentMessages,
+            tool_choice: "auto",
           });
 
-          // Forward text tokens to client in real-time
-          msgStream.on("text", (delta) => {
-            send({ type: "token", text: delta });
-          });
+          // Accumulate streamed content and tool call deltas
+          let contentText = "";
+          let finishReason: string | null = null;
+          const tcMap: Record<
+            number,
+            { id: string; name: string; arguments: string }
+          > = {};
 
-          // Wait for the full response (includes tool use blocks)
-          const message = await msgStream.finalMessage();
+          for await (const chunk of openaiStream) {
+            const choice = chunk.choices[0];
+            if (!choice) continue;
 
-          // Check for tool use blocks
-          const toolUses = message.content.filter(
-            (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+            finishReason = choice.finish_reason ?? finishReason;
+            const delta = choice.delta;
+
+            // Forward text tokens to client in real-time
+            if (delta?.content) {
+              contentText += delta.content;
+              send({ type: "token", text: delta.content });
+            }
+
+            // Accumulate tool call deltas (name + arguments arrive in pieces)
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                if (!tcMap[tc.index]) {
+                  tcMap[tc.index] = { id: "", name: "", arguments: "" };
+                }
+                if (tc.id) tcMap[tc.index].id = tc.id;
+                if (tc.function?.name) tcMap[tc.index].name += tc.function.name;
+                if (tc.function?.arguments)
+                  tcMap[tc.index].arguments += tc.function.arguments;
+              }
+            }
+          }
+
+          // Reconstruct full tool call objects — use a local type to avoid SDK union ambiguity
+          type FunctionToolCall = {
+            id: string;
+            type: "function";
+            function: { name: string; arguments: string };
+          };
+          const toolCalls: FunctionToolCall[] = Object.values(tcMap).map(
+            (tc) => ({
+              id: tc.id,
+              type: "function" as const,
+              function: { name: tc.name, arguments: tc.arguments },
+            })
           );
 
+          // Append assistant turn to conversation history
+          allMessages.push({
+            role: "assistant",
+            content: contentText || null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(toolCalls.length > 0 ? { tool_calls: toolCalls as any } : {}),
+          });
+
           // No tool calls → conversation complete
-          if (toolUses.length === 0) break;
+          if (finishReason !== "tool_calls" || toolCalls.length === 0) break;
 
-          // Execute each tool call
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-          for (const toolUse of toolUses) {
-            const input = toolUse.input as {
+          // Execute each tool call and append results as tool messages
+          for (const toolCall of toolCalls) {
+            const input = JSON.parse(toolCall.function.arguments) as {
               entity: string;
               filter?: string;
               select?: string;
@@ -289,10 +338,7 @@ export async function POST(req: NextRequest) {
             try {
               const data = await queryPriorityERP(input);
 
-              // Summarize result count for the status
-              const count = Array.isArray(data?.value)
-                ? data.value.length
-                : 0;
+              const count = Array.isArray(data?.value) ? data.value.length : 0;
               send({
                 type: "status",
                 message: `${entityLabel} → ${count} records`,
@@ -305,9 +351,9 @@ export async function POST(req: NextRequest) {
                 durationMs: Date.now() - callStart,
               });
 
-              toolResults.push({
-                type: "tool_result",
-                tool_use_id: toolUse.id,
+              allMessages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
                 content: JSON.stringify(data),
               });
             } catch (error) {
@@ -325,27 +371,21 @@ export async function POST(req: NextRequest) {
                 durationMs: Date.now() - callStart,
               });
 
-              toolResults.push({
-                type: "tool_result",
-                tool_use_id: toolUse.id,
+              allMessages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
                 content: `Query failed: ${errorMsg}`,
-                is_error: true,
               });
             }
           }
-
-          // Continue loop with tool results added to context
-          currentMessages = [
-            ...currentMessages,
-            { role: "assistant", content: message.content },
-            { role: "user", content: toolResults },
-          ];
         }
 
         send({ type: "done" });
       } catch (error) {
         const msg =
-          error instanceof Error ? error.message : "An unexpected error occurred";
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred";
         send({ type: "error", message: msg });
       } finally {
         controller.close();

@@ -20,12 +20,12 @@ This is a **Next.js 15 App Router** project with a single-page chat UI that quer
 
 ```
 Browser (app/page.tsx)
-  → POST /api/chat  (sends full message history as Anthropic.MessageParam[])
+  → POST /api/chat  (sends full message history as { role, content }[])
   → app/api/chat/route.ts
-      → client.messages.stream() with claude-sonnet-4-6
-      → Claude calls query_priority_erp tool
+      → AzureOpenAI client.chat.completions.create({ stream: true })
+      → Model calls query_priority_erp tool (OpenAI function calling)
       → route.ts fetches Priority ERP OData API (Basic auth)
-      → tool result fed back to Claude (up to 8 iterations)
+      → tool result fed back as role:"tool" message (up to 8 iterations)
       → SSE stream: { type: "token"|"status"|"done"|"error" }
   → Browser parses SSE, updates streaming message state
 ```
@@ -37,7 +37,7 @@ Browser (app/page.tsx)
 - **`app/page.tsx`** — Single `"use client"` component (~900 lines). Contains all UI: `WelcomeScreen`, `MarkdownContent` (react-markdown + remark-gfm), `MessageBubble`, `StatusIndicator`, sidebar with `QUICK_QUERIES`, and the SSE parsing loop.
 - **`app/globals.css`** — Imports Syne + JetBrains Mono from Google Fonts, defines the dark industrial theme via CSS variables, markdown table styles (`.markdown-body`), and scan-line animation.
 - **`tailwind.config.ts`** — Custom color palette: `bg` (#06060F), `surface`, `border`, amber/emerald/rose/blue ERP accent colors. Font families: `font-sans` = Syne, `font-mono` = JetBrains Mono.
-- **`next.config.mjs`** — Sets `dns.setDefaultResultOrder("ipv4first")` at module load time. This is critical — IPv6 is broken on the deployment network; without this fix all outbound HTTPS connections (Anthropic API + Priority ERP) fail with ECONNRESET.
+- **`next.config.mjs`** — Sets `dns.setDefaultResultOrder("ipv4first")` at module load time. This is critical — IPv6 is broken on the deployment network; without this fix all outbound HTTPS connections (Azure OpenAI + Priority ERP) fail with ECONNRESET.
 
 ### Priority ERP API
 
@@ -49,10 +49,22 @@ Browser (app/page.tsx)
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
 - Open orders: `BOOLCLOSED eq null`; closed: `BOOLCLOSED eq 'Y'`
 
+### AI backend — Azure OpenAI (Azure Foundry)
+
+The app uses **Azure OpenAI** via the `openai` npm package (`AzureOpenAI` client). Tool calling uses OpenAI function-calling format (`type: "function"`). The agentic loop appends results as `role: "tool"` messages (not Anthropic `tool_result` blocks).
+
+- **Endpoint**: `https://giatec-resource.cognitiveservices.azure.com`
+- **Deployment**: configured via `AZURE_OPENAI_DEPLOYMENT` env var (currently `gpt-5.2`)
+- **API version**: `2024-05-01-preview`
+- System prompt is the first message in the array (`role: "system"`)
+
 ### Environment variables (`.env.local`)
 
 ```
-ANTHROPIC_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://giatec-resource.cognitiveservices.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=gpt-5.2          # must match the Azure deployment name exactly
+AZURE_OPENAI_API_VERSION=2024-05-01-preview
 PRIORITY_BASE_URL=...        # optional, has hardcoded fallback
 PRIORITY_USERNAME=...        # optional, has hardcoded fallback
 PRIORITY_PASSWORD=...        # optional, has hardcoded fallback
@@ -62,7 +74,7 @@ PRIORITY_PASSWORD=...        # optional, has hardcoded fallback
 
 | Event type | Payload | Purpose |
 |---|---|---|
-| `token` | `{ text: string }` | Streaming Claude text delta |
+| `token` | `{ text: string }` | Streaming model text delta |
 | `status` | `{ message: string }` | ERP query progress ("Querying ORDERS...") |
 | `done` | — | Stream complete |
 | `error` | `{ message: string }` | Error to display |
@@ -94,7 +106,6 @@ GET /api/logs?limit=50          # change page size
 
 ### Known issues / quirks
 
-- `thinking: { type: "adaptive" }` is cast as `any` because the SDK TypeScript types haven't caught up with the API yet.
-- **IPv6 broken on this network** — `next.config.mjs` applies `dns.setDefaultResultOrder("ipv4first")` globally. Never remove this line; without it all outbound TLS connections fail silently with ECONNRESET.
+- **IPv6 broken on this network** — `next.config.mjs` applies `dns.setDefaultResultOrder("ipv4first")` globally. Never remove this line; without it all outbound TLS connections (Azure OpenAI + Priority ERP) fail silently with ECONNRESET.
 - The Priority ERP API uses `Asia/Jerusalem` timezone (UTC+2/+3) — date filters must include timezone offset, e.g. `2026-01-01T00:00:00+02:00`.
 - The system prompt and UI are fully Hebrew / RTL. `app/layout.tsx` sets `<html lang="he" dir="rtl">`. Sidebar uses `borderLeft` (not `borderRight`) because RTL flex reverses child order.
