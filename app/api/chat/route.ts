@@ -3,6 +3,7 @@ import type OpenAI from "openai";
 import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
+import { buildSchemaReference } from "@/lib/erp-schema";
 
 // ─── API Call Logger ────────────────────────────────────────────────────────
 const LOG_FILE = path.join(process.cwd(), "logs", "priority-api-calls.jsonl");
@@ -120,19 +121,6 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 - Customers and products may have Hebrew names (CUSTDES, PARTDES fields)
 - Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
-**KEY ENTITIES & IMPORTANT FIELDS:**
-- **CUSTOMERS**: Customer master data
-  - CUSTNAME (customer code), CUSTDES (Hebrew name), ECUSTDES (English name), STATDES (status), AGENTNAME (sales rep), EMAIL, PHONE, PAYDES (payment terms), OBCODE (currency)
-- **ORDERS**: Sales orders
-  - ORDNAME (order number e.g. SO2600001), CUSTNAME (customer code), CDES (customer name), CURDATE (order date), DUEDATE (delivery date), TOTPRICE (total), CODE (currency), ORDSTATUSDES (status), BOOLCLOSED ('Y'=closed/null=open), TYPEDES (order type), AGENTNAME (sales rep), DISTRLINEDES (distribution line)
-- **PART**: Products/items
-  - PARTNAME (item code), PARTDES (description), PARTTYPEDES (product type), PRICELISTD (list price), STATDES (status)
-- **SUPPLIERS**: Supplier master
-  - SUPNAME (supplier code), SUPDES (name), AGENTNAME, EMAIL, PHONE
-- **PORDERS**: Purchase orders
-  - PORDNAME, SUPNAME, SDES (supplier name), CURDATE, DUEDATE, TOTPRICE, CODE, BOOLCLOSED
-- **DOCUMENTS_D**: Delivery notes / shipping documents
-
 **כיצד להשיב:**
 1. תמיד שאל את ה-ERP תחילה לשאלות נתונים — אל תנחש
 2. הצג נתונים בטבלאות markdown מעוצבות היטב עם כותרות ברורות
@@ -153,7 +141,11 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 - Specific order: filter="ORDNAME eq 'SO2600001'"
 - Multiple conditions: filter="BOOLCLOSED eq null and CURDATE ge 2026-01-01T00:00:00+02:00"
 - Sort newest first: orderby="CURDATE desc"
-- Specific customer's orders: filter="CUSTNAME eq '400204'"`;
+- Specific customer's orders: filter="CUSTNAME eq '400204'"
+
+**ENTITY & FIELD REFERENCE:**
+${buildSchemaReference()}
+`;
 
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
@@ -168,7 +160,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           entity: {
             type: "string",
             description:
-              "The entity/table to query. Options: CUSTOMERS, ORDERS, PART, SUPPLIERS, PORDERS, DOCUMENTS_D, ACCBAL, INVOICES",
+              "The entity/table to query. Options: CUSTOMERS, ORDERS, LOGPART, SUPPLIERS, PORDERS, DOCUMENTS_D, ACCBAL, INVOICES",
           },
           filter: {
             type: "string",

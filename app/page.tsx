@@ -203,7 +203,7 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
         עוזר Priority ERP
       </h1>
       <p className="text-sm mb-8 md:mb-10" style={{ color: "#50507A" }}>
-        מופעל על ידי Claude Sonnet · סביבת moftov
+        מופעל על ידי ChatGPT 5.2 · סביבת moftov
       </p>
 
       {/* Capability cards — 1 col on mobile, 2 cols on sm+ */}
@@ -916,7 +916,7 @@ export default function ChatPage() {
               className="hidden md:inline text-xs"
               style={{ color: "#30304A", fontFamily: "JetBrains Mono, monospace" }}
             >
-              claude-sonnet-4-6
+              ChatGPT 5.2
             </span>
           </div>
         </header>

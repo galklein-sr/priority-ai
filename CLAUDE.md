@@ -79,6 +79,9 @@ PRIORITY_PASSWORD=...        # optional, has hardcoded fallback
 | `done` | — | Stream complete |
 | `error` | `{ message: string }` | Error to display |
 
+### Table Defenitions
+When asked about products use the LOGPART table and not PART
+
 ### API call log
 
 Every Priority ERP query is appended as a JSON line to `logs/priority-api-calls.jsonl` (created on first use, gitignored). Each entry records:

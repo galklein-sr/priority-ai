@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=Heebo:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -54,16 +54,17 @@ body {
   background: var(--text-muted);
 }
 
-/* Textarea reset */
+/* Textarea reset — Heebo for comfortable Hebrew input */
 textarea {
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: 'Heebo', 'Syne', system-ui, sans-serif;
 }
 
-/* Markdown content styles */
+/* Markdown content styles — Heebo for clear Hebrew rendering */
 .markdown-body {
   color: var(--text);
-  line-height: 1.7;
-  font-size: 0.875rem;
+  line-height: 1.8;
+  font-size: 0.9rem;
+  font-family: 'Heebo', system-ui, sans-serif;
 }
 
 .markdown-body p {
@@ -162,8 +163,8 @@ textarea {
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
+  font-family: 'Heebo', system-ui, sans-serif;
+  font-size: 0.82rem;
 }
 
 .markdown-body thead tr {
