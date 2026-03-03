@@ -1,0 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #06060F;
+  --surface: #0B0B18;
+  --surface-2: #10101F;
+  --surface-3: #161628;
+  --border: #1C1C35;
+  --border-2: #252540;
+  --text: #C4C4DC;
+  --text-muted: #50507A;
+  --accent: #F59E0B;
+  --accent-dim: rgba(245, 158, 11, 0.12);
+  --success: #10B981;
+  --error: #F43F5E;
+  --blue: #3B82F6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Textarea reset */
+textarea {
+  font-family: 'Syne', system-ui, sans-serif;
+}
+
+/* Markdown content styles */
+.markdown-body {
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 0.875rem;
+}
+
+.markdown-body p {
+  margin: 0 0 0.75em 0;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body strong {
+  color: #E8E8F8;
+  font-weight: 600;
+}
+
+.markdown-body em {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.markdown-body code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  color: var(--accent);
+}
+
+.markdown-body pre {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.markdown-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  color: #E8E8F8;
+  font-weight: 700;
+  margin: 1em 0 0.5em 0;
+  line-height: 1.3;
+}
+
+.markdown-body h1 { font-size: 1.25rem; }
+.markdown-body h2 { font-size: 1.1rem; }
+.markdown-body h3 { font-size: 1rem; }
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.25em;
+  margin: 0.5em 0;
+}
+
+.markdown-body li {
+  margin: 0.25em 0;
+}
+
+.markdown-body ul li::marker {
+  color: var(--accent);
+}
+
+.markdown-body a {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: var(--text-muted);
+}
+
+/* Data table */
+.markdown-body .table-wrapper {
+  overflow-x: auto;
+  margin: 1em 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+}
+
+.markdown-body thead tr {
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-2);
+}
+
+.markdown-body thead th {
+  padding: 0.6rem 0.875rem;
+  text-align: left;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.markdown-body tbody tr:last-child {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:hover {
+  background: var(--surface-3);
+}
+
+.markdown-body tbody td {
+  padding: 0.55rem 0.875rem;
+  color: var(--text);
+  vertical-align: top;
+}
+
+.markdown-body tbody td:first-child {
+  color: #E8E8F8;
+  font-weight: 500;
+}
+
+/* Horizontal rule */
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+/* Glow effect for input */
+.input-glow:focus {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 20px rgba(245, 158, 11, 0.08);
+}
+
+/* Scan line overlay */
+.scanline::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(transparent, rgba(245, 158, 11, 0.03), transparent);
+  animation: scan 8s linear infinite;
+  pointer-events: none;
+  z-index: 100;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-4px); }
+  100% { transform: translateY(100vh); }
+}
+
+/* Status badge flash */
+@keyframes statusFlash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-flash {
+  animation: statusFlash 1.5s ease infinite;
+}
+
+/* Message entry animation */
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-animate {
+  animation: msgIn 0.3s ease forwards;
+}
+
+/* Cursor blink */
+.cursor::after {
+  content: '▋';
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment variables — never commit
+.env
+.env.local
+.env*.local
+
+# API call logs (may contain business data) — root-level only
+/logs/
+
+# Misc artifacts
+nul
+*.log
+.DS_Store
+Thumbs.db
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Vercel / deployment
+.vercel
