@@ -159,30 +159,30 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
   ];
 
   return (
-    <div className="flex flex-col items-center justify-center h-full py-16 animate-fade-in">
+    <div className="flex flex-col items-center justify-center h-full py-8 md:py-16 animate-fade-in">
       {/* Abra logo */}
-      <div className="mb-6">
+      <div className="mb-4 md:mb-6">
         <Image
           src="/abra-logo.png"
           alt="Abra IT"
-          width={120}
-          height={25}
+          width={100}
+          height={21}
           style={{ filter: "brightness(0) invert(1)", opacity: 0.85 }}
           priority
         />
       </div>
 
       {/* Priority mark */}
-      <div className="relative mb-6">
+      <div className="relative mb-4 md:mb-6">
         <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          className="w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center"
           style={{
             background: "linear-gradient(135deg, #F59E0B22, #F59E0B44)",
             border: "1px solid #F59E0B55",
           }}
         >
           <span
-            className="text-2xl font-black"
+            className="text-xl md:text-2xl font-black"
             style={{ color: "#F59E0B", fontFamily: "Syne, sans-serif" }}
           >
             P
@@ -197,17 +197,17 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
       </div>
 
       <h1
-        className="text-2xl font-bold mb-2 tracking-tight"
+        className="text-xl md:text-2xl font-bold mb-2 tracking-tight"
         style={{ color: "#E8E8F8", fontFamily: "Syne, sans-serif" }}
       >
         עוזר Priority ERP
       </h1>
-      <p className="text-sm mb-10" style={{ color: "#50507A" }}>
+      <p className="text-sm mb-8 md:mb-10" style={{ color: "#50507A" }}>
         מופעל על ידי Claude Sonnet · סביבת moftov
       </p>
 
-      {/* Capability cards */}
-      <div className="grid grid-cols-2 gap-3 max-w-xl w-full mb-10 px-4">
+      {/* Capability cards — 1 col on mobile, 2 cols on sm+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl w-full mb-8 md:mb-10 px-4">
         {capabilities.map((cap) => (
           <div
             key={cap.title}
@@ -241,7 +241,7 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
           <button
             key={q}
             onClick={() => onQuery(q)}
-            className="px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105"
+            className="px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105 active:scale-95"
             style={{
               background: "#10101F",
               border: "1px solid #1C1C35",
@@ -283,7 +283,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (isUser) {
     return (
       <div className="msg-animate flex justify-start mb-4">
-        <div className="max-w-[70%]">
+        <div className="max-w-[88%] md:max-w-[70%]">
           <div
             className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed"
             style={{
@@ -307,7 +307,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className="msg-animate flex justify-end mb-4">
-      <div className="max-w-[85%] min-w-[200px]">
+      <div className="max-w-[96%] md:max-w-[85%] w-full">
         {/* Header row with entity badges */}
         <div className="flex items-center gap-2 mb-2 flex-row-reverse">
           {/* Assistant icon */}
@@ -323,23 +323,25 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             </span>
           </div>
 
-          {/* Entity badges */}
-          {entities.map((entity) => (
-            <span
-              key={entity}
-              className="px-1.5 py-0.5 rounded text-xs font-mono"
-              style={{
-                background: "rgba(59, 130, 246, 0.12)",
-                border: "1px solid rgba(59, 130, 246, 0.25)",
-                color: "#60A5FA",
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: "0.65rem",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {entity}
-            </span>
-          ))}
+          {/* Entity badges — hidden on very small screens */}
+          <div className="hidden sm:flex items-center gap-2">
+            {entities.map((entity) => (
+              <span
+                key={entity}
+                className="px-1.5 py-0.5 rounded text-xs font-mono"
+                style={{
+                  background: "rgba(59, 130, 246, 0.12)",
+                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                  color: "#60A5FA",
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {entity}
+              </span>
+            ))}
+          </div>
 
           <span
             className="text-xs mr-auto"
@@ -355,7 +357,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
         {/* Message card */}
         <div
-          className="px-5 py-4 rounded-2xl rounded-tr-sm"
+          className="px-4 md:px-5 py-4 rounded-2xl rounded-tr-sm"
           style={{
             background: "#0E0E1E",
             border: "1px solid #1C1C35",
@@ -387,7 +389,7 @@ function StatusIndicator({ status }: { status: string }) {
   return (
     <div className="msg-animate flex justify-end mb-4">
       <div
-        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl"
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl max-w-[90%]"
         style={{
           background: "#0B0B18",
           border: "1px solid #1C1C35",
@@ -395,7 +397,7 @@ function StatusIndicator({ status }: { status: string }) {
         }}
       >
         <span
-          className="text-xs"
+          className="text-xs truncate"
           style={{
             color: "#A8A8C8",
             fontFamily: "JetBrains Mono, monospace",
@@ -404,7 +406,7 @@ function StatusIndicator({ status }: { status: string }) {
           {status}
         </span>
         {/* Animated dots */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-shrink-0">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -428,10 +430,20 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentStatus, setCurrentStatus] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Detect mobile breakpoint and set sidebar default
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    setSidebarOpen(window.innerWidth >= 768);
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Auto-scroll
   useEffect(() => {
@@ -450,6 +462,9 @@ export default function ChatPage() {
     async (overrideText?: string) => {
       const text = (overrideText ?? input).trim();
       if (!text || isLoading) return;
+
+      // Close sidebar on mobile after sending
+      if (isMobile) setSidebarOpen(false);
 
       setInput("");
       setIsLoading(true);
@@ -564,7 +579,7 @@ export default function ChatPage() {
         });
       }
     },
-    [messages, input, isLoading]
+    [messages, input, isLoading, isMobile]
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -584,33 +599,81 @@ export default function ChatPage() {
       className="flex h-screen overflow-hidden scanline"
       style={{ background: "var(--bg)" }}
     >
-      {/* ── Sidebar (right side in RTL) ──────────────────────────────────── */}
+      {/* ── Mobile backdrop (tap to close sidebar) ──────────────────────── */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{ background: "rgba(0,0,0,0.65)" }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      {/* Mobile: fixed overlay sliding from right side (RTL).               */}
+      {/* Desktop: normal flex item that collapses to width 0 when closed.   */}
       <aside
         className="flex flex-col transition-all duration-300"
         style={{
-          width: sidebarOpen ? "240px" : "0px",
-          overflow: "hidden",
+          ...(isMobile
+            ? {
+                position: "fixed",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: "260px",
+                zIndex: 50,
+                transform: sidebarOpen ? "translateX(0)" : "translateX(100%)",
+              }
+            : {
+                width: sidebarOpen ? "240px" : "0px",
+                overflow: "hidden",
+                flexShrink: 0,
+              }),
           background: "var(--surface)",
           borderLeft: "1px solid var(--border)",
-          flexShrink: 0,
         }}
       >
-        <div style={{ width: "240px" }} className="flex flex-col h-full">
+        <div style={{ width: isMobile ? "260px" : "240px" }} className="flex flex-col h-full">
           {/* Brand header */}
           <div
             className="p-4 pb-3"
             style={{ borderBottom: "1px solid var(--border)" }}
           >
-            {/* Abra logo */}
-            <div className="flex justify-center mb-3">
-              <Image
-                src="/abra-logo.png"
-                alt="Abra IT"
-                width={90}
-                height={19}
-                style={{ filter: "brightness(0) invert(1)", opacity: 0.7 }}
-              />
-            </div>
+            {/* Mobile close button */}
+            {isMobile && (
+              <div className="flex justify-between items-center mb-3">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="w-7 h-7 rounded flex items-center justify-center"
+                  style={{ color: "#50507A" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+                <Image
+                  src="/abra-logo.png"
+                  alt="Abra IT"
+                  width={80}
+                  height={17}
+                  style={{ filter: "brightness(0) invert(1)", opacity: 0.7 }}
+                />
+              </div>
+            )}
+
+            {/* Desktop logo */}
+            {!isMobile && (
+              <div className="flex justify-center mb-3">
+                <Image
+                  src="/abra-logo.png"
+                  alt="Abra IT"
+                  width={90}
+                  height={19}
+                  style={{ filter: "brightness(0) invert(1)", opacity: 0.7 }}
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-2.5 mb-3">
               <div
@@ -700,7 +763,7 @@ export default function ChatPage() {
                       key={q}
                       onClick={() => sendMessage(q)}
                       disabled={isLoading}
-                      className="w-full text-right px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 hover:-translate-x-0.5"
+                      className="w-full text-right px-2.5 py-2 rounded-lg text-xs transition-all duration-150 hover:-translate-x-0.5 active:scale-95"
                       style={{
                         color: "#8888A8",
                         fontFamily: "Syne, sans-serif",
@@ -732,7 +795,7 @@ export default function ChatPage() {
           >
             <button
               onClick={handleClearChat}
-              className="w-full px-3 py-2 rounded-lg text-xs transition-all text-right"
+              className="w-full px-3 py-2 rounded-lg text-xs transition-all text-right active:scale-95"
               style={{ color: "#50507A" }}
               onMouseEnter={(e) => {
                 (e.target as HTMLElement).style.background = "var(--surface-2)";
@@ -750,20 +813,20 @@ export default function ChatPage() {
       </aside>
 
       {/* ── Main Area ──────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
         <header
-          className="flex items-center justify-between px-4 h-11 flex-shrink-0"
+          className="flex items-center justify-between px-3 md:px-4 h-11 flex-shrink-0"
           style={{
             background: "var(--surface)",
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {/* Sidebar toggle */}
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              className="w-7 h-7 rounded flex items-center justify-center transition-all"
+              className="w-7 h-7 rounded flex items-center justify-center transition-all flex-shrink-0"
               style={{ color: "#50507A" }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.background =
@@ -791,12 +854,12 @@ export default function ChatPage() {
             </button>
 
             <div
-              className="h-4 w-px"
+              className="h-4 w-px flex-shrink-0"
               style={{ background: "var(--border)" }}
             />
 
             <span
-              className="text-sm font-semibold"
+              className="text-sm font-semibold truncate"
               style={{ color: "#C4C4DC" }}
             >
               עוזר חכם
@@ -804,35 +867,37 @@ export default function ChatPage() {
 
             {messages.length > 0 && (
               <span
-                className="px-2 py-0.5 rounded-full text-xs"
+                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0"
                 style={{
                   background: "var(--surface-2)",
                   color: "#50507A",
                   fontFamily: "JetBrains Mono, monospace",
                 }}
               >
-                {messages.filter((m) => m.role === "user").length} שאילתות
+                {messages.filter((m) => m.role === "user").length}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Abra logo in header */}
-            <Image
-              src="/abra-logo.png"
-              alt="Abra IT"
-              width={64}
-              height={13}
-              style={{ filter: "brightness(0) invert(1)", opacity: 0.4 }}
-            />
+          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+            {/* Abra logo — hidden on very small screens */}
+            <div className="hidden sm:block">
+              <Image
+                src="/abra-logo.png"
+                alt="Abra IT"
+                width={64}
+                height={13}
+                style={{ filter: "brightness(0) invert(1)", opacity: 0.4 }}
+              />
+            </div>
             <div
-              className="h-4 w-px"
+              className="hidden sm:block h-4 w-px"
               style={{ background: "var(--border)" }}
             />
             {isLoading && (
               <div className="flex items-center gap-1.5">
                 <div
-                  className="w-1.5 h-1.5 rounded-full status-flash"
+                  className="w-1.5 h-1.5 rounded-full status-flash flex-shrink-0"
                   style={{ background: "#F59E0B" }}
                 />
                 <span
@@ -846,8 +911,9 @@ export default function ChatPage() {
                 </span>
               </div>
             )}
+            {/* Model badge — hidden on mobile */}
             <span
-              className="text-xs"
+              className="hidden md:inline text-xs"
               style={{ color: "#30304A", fontFamily: "JetBrains Mono, monospace" }}
             >
               claude-sonnet-4-6
@@ -858,7 +924,7 @@ export default function ChatPage() {
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto">
           <div
-            className="min-h-full px-6 py-4"
+            className="min-h-full px-3 md:px-6 py-4"
             style={{
               backgroundImage:
                 "linear-gradient(rgba(28,28,53,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(28,28,53,0.15) 1px, transparent 1px)",
@@ -883,7 +949,7 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div
-          className="flex-shrink-0 p-4"
+          className="flex-shrink-0 p-2 md:p-4"
           style={{
             background: "var(--surface)",
             borderTop: "1px solid var(--border)",
@@ -891,7 +957,7 @@ export default function ChatPage() {
         >
           <div className="max-w-4xl mx-auto">
             <div
-              className="flex items-end gap-3 rounded-xl p-3"
+              className="flex items-end gap-2 md:gap-3 rounded-xl p-2.5 md:p-3"
               style={{
                 background: "var(--surface-2)",
                 border: "1px solid var(--border-2)",
@@ -911,11 +977,11 @@ export default function ChatPage() {
                 }
               }}
             >
-              {/* Send button (right side in RTL = start) */}
+              {/* Send button */}
               <button
                 onClick={() => sendMessage()}
                 disabled={isLoading || !input.trim()}
-                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
+                className="flex-shrink-0 w-9 h-9 md:w-8 md:h-8 rounded-lg flex items-center justify-center transition-all duration-200"
                 style={{
                   background:
                     !isLoading && input.trim()
@@ -971,7 +1037,7 @@ export default function ChatPage() {
                 }}
               />
 
-              {/* Prompt indicator (left side in RTL = end) */}
+              {/* Prompt indicator */}
               <div
                 className="flex-shrink-0 pb-1"
                 style={{
@@ -986,7 +1052,8 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between mt-1.5 px-1">
+            {/* Keyboard hint — desktop only */}
+            <div className="hidden md:flex items-center justify-between mt-1.5 px-1">
               <span
                 className="text-xs"
                 style={{
