@@ -241,6 +241,29 @@ const DOCUMENTS_D: EntityDef = {
   ],
 };
 
+// ─── AGENTS (Sales Agents / Representatives) ──────────────────────────────────
+
+const AGENTS: EntityDef = {
+  name: "AGENTS",
+  hebrewName: "סוכנים",
+  description: "Sales agents / representatives master data. Each row is one sales rep or agent.",
+  fields: [
+    { name: "AGENTNAME", hebrewName: "קוד סוכן",    type: "string",  description: "Unique agent code (used as FK in CUSTOMERS.AGENTNAME and ORDERS.AGENTNAME)", example: "COHEN" },
+    { name: "AGENTDES",  hebrewName: "שם סוכן",      type: "string",  description: "Full name of the sales agent" },
+    { name: "EMAIL",     hebrewName: "אימייל",         type: "string",  description: "Agent email address" },
+    { name: "PHONE",     hebrewName: "טלפון",          type: "string",  description: "Agent phone number" },
+    { name: "CELLPHONE", hebrewName: "נייד",           type: "string",  description: "Agent mobile / cell phone number" },
+    { name: "INACTIVE",  hebrewName: "לא פעיל",        type: "enum",    description: "null = active agent; 'Y' = inactive/disabled" },
+  ],
+  queryTips: [
+    "All active agents: filter=\"INACTIVE eq null\"",
+    "Search by name: filter=\"contains(AGENTDES,'כהן')\"",
+    "Get agent by code: filter=\"AGENTNAME eq 'COHEN'\"",
+    "Join with CUSTOMERS: query CUSTOMERS with select=\"CUSTNAME,CUSTDES,AGENTNAME,AGENTDES\"",
+    "Join with ORDERS: query ORDERS with select=\"ORDNAME,CDES,AGENTNAME\" to see orders per agent",
+  ],
+};
+
 // ─── ACCBAL (Account Balances) ────────────────────────────────────────────────
 
 const ACCBAL: EntityDef = {
@@ -323,6 +346,7 @@ export const ERP_ENTITIES: Record<string, EntityDef> = {
   ORDERS,
   ORDERITEMS_SUBFORM: ORDERITEMS,
   LOGPART,
+  AGENTS,
   SUPPLIERS,
   PORDERS,
   INVOICES,

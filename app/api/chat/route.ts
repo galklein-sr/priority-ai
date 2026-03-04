@@ -169,6 +169,11 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 8. אם שאילתה לא מחזירה תוצאות, אמור זאת בבירור והצע סיבה אפשרית
 9. ענה תמיד בעברית — זו שפת הממשק של המשתמש
 
+**ENTITY DISAMBIGUATION — CRITICAL:**
+- "הזמנות" / "orders" / sales orders → use entity **ORDERS** (sales orders from customers)
+- "הזמנות רכש" / "purchase orders" / orders to suppliers → use entity **PORDERS** (purchase orders to suppliers)
+- Never confuse these two. ORDERS = selling TO customers. PORDERS = buying FROM suppliers.
+
 **ODATA QUERY PATTERNS:**
 - Open orders: filter="BOOLCLOSED eq null"
 - Closed orders: filter="BOOLCLOSED eq 'Y'"
@@ -197,7 +202,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           entity: {
             type: "string",
             description:
-              "The entity/table to query. Options: CUSTOMERS, ORDERS, LOGPART, SUPPLIERS, PORDERS, DOCUMENTS_D, ACCBAL, INVOICES",
+              "The entity/table to query. Options: CUSTOMERS, ORDERS (sales orders from customers), LOGPART (products), AGENTS (sales reps), SUPPLIERS, PORDERS (purchase orders to suppliers), DOCUMENTS_D (delivery notes), ACCBAL (account balances), INVOICES. IMPORTANT: use ORDERS for sales orders, PORDERS for purchase orders — never swap them.",
           },
           filter: {
             type: "string",
