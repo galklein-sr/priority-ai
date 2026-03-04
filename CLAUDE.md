@@ -32,7 +32,8 @@ Browser (app/page.tsx)
 
 ### Key files
 
-- **`app/api/chat/route.ts`** — The entire backend. Defines the `queryPriorityERP` fetch helper, the `SYSTEM_PROMPT` with ERP entity/field documentation, the `query_priority_erp` tool schema, and the SSE streaming POST handler with agentic loop (max 8 iterations). Also contains the API call logger (`appendApiLog`, `extractUserQuestion`).
+- **`lib/erp-schema.ts`** — Single source of truth for ERP knowledge. Exports `ERP_ENTITIES` (entity/field definitions injected into `SYSTEM_PROMPT` via `buildSchemaReference()`) and `ENTITY_ALIASES` (maps wrong/alternate entity names to correct ones for the fallback retry system). Edit this file to add entities or update field descriptions.
+- **`app/api/chat/route.ts`** — The entire backend. Defines `buildErpUrl`/`queryPriorityERP` (with alias-fallback on 5xx), the `SYSTEM_PROMPT` built from `buildSchemaReference()`, the `query_priority_erp` tool schema, and the SSE streaming POST handler with agentic loop (max 8 iterations). Also contains the API call logger (`appendApiLog`, `extractUserQuestion`).
 - **`app/api/logs/route.ts`** — `GET /api/logs` endpoint for reading the JSONL log. Supports `?entity=ORDERS`, `?status=error`, `?limit=N` query params. Returns entries newest-first plus aggregate stats.
 - **`app/page.tsx`** — Single `"use client"` component (~900 lines). Contains all UI: `WelcomeScreen`, `MarkdownContent` (react-markdown + remark-gfm), `MessageBubble`, `StatusIndicator`, sidebar with `QUICK_QUERIES`, and the SSE parsing loop.
 - **`app/globals.css`** — Imports Syne + JetBrains Mono from Google Fonts, defines the dark industrial theme via CSS variables, markdown table styles (`.markdown-body`), and scan-line animation.
@@ -45,9 +46,11 @@ Browser (app/page.tsx)
 - **Auth**: HTTP Basic (`PRIORITY_USERNAME:PRIORITY_PASSWORD`)
 - **Protocol**: OData v4 — standard `$filter`, `$select`, `$top`, `$orderby`, `$expand` params
 - **`$top` is capped at 50** in `queryPriorityERP`
-- Key entities: `CUSTOMERS`, `ORDERS`, `PART`, `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`
+- Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
+- Full entity list: `GET /odata/priority/tabula.ini/moftov/` with Basic auth → JSON `{value:[{name,kind,url}]}`
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
 - Open orders: `BOOLCLOSED eq null`; closed: `BOOLCLOSED eq 'Y'`
+- Postman collection reference: https://documenter.getpostman.com/view/30274649/2sB3QRmRt4
 
 ### AI backend — Azure OpenAI (Azure Foundry)
 
@@ -79,8 +82,11 @@ PRIORITY_PASSWORD=...        # optional, has hardcoded fallback
 | `done` | — | Stream complete |
 | `error` | `{ message: string }` | Error to display |
 
-### Table Defenitions
-When asked about products use the LOGPART table and not PART
+### Entity alias / fallback retry
+
+`queryPriorityERP` builds a candidate list `[requestedEntity, ...ENTITY_ALIASES[requestedEntity]]` and tries each in order. A **4xx** is thrown immediately (bad filter/field, not a table name issue). A **5xx** triggers a move to the next alias. The resolved entity name and failed alternatives are included in the log entry and sent to the model as a `[NOTE]` in the tool result.
+
+To register a new alias, add an entry to `ENTITY_ALIASES` in `lib/erp-schema.ts`.
 
 ### API call log
 
@@ -88,13 +94,15 @@ Every Priority ERP query is appended as a JSON line to `logs/priority-api-calls.
 
 ```json
 {
-  "timestamp": "2026-03-03T10:45:12.034Z",
+  "timestamp": "2026-03-04T10:45:12.034Z",
   "userQuestion": "מה הזמנות הפתוחות השבוע?",
   "entity": "ORDERS",
   "params": { "filter": "BOOLCLOSED eq null", "select": "...", "top": 20 },
   "status": "success",
   "recordCount": 14,
-  "durationMs": 438
+  "durationMs": 438,
+  "resolvedEntity": "ORDERS",
+  "alternativesTried": []
 }
 ```
 
