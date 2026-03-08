@@ -46,10 +46,12 @@ Browser (app/page.tsx)
 - **Auth**: HTTP Basic (`PRIORITY_USERNAME:PRIORITY_PASSWORD`)
 - **Protocol**: OData v4 — standard `$filter`, `$select`, `$top`, `$orderby`, `$expand` params
 - **`$top` is capped at 50** in `queryPriorityERP`
-- Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
+- Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `AGENTS` (sales reps), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
 - Full entity list: `GET /odata/priority/tabula.ini/moftov/` with Basic auth → JSON `{value:[{name,kind,url}]}`
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
-- Open orders: `BOOLCLOSED eq null`; closed: `BOOLCLOSED eq 'Y'`
+- Open orders: `BOOLCLOSED ne 'Y'`; closed: `BOOLCLOSED eq 'Y'` — **never use null in filters** (causes 500)
+- Active customers/items: `STATDES eq 'פעיל'` — **never** `INACTIVEFLAG eq null`
+- Order status values (ORDSTATUSDES): `טיוטא` / `אושר מוקדנית` / `מאושר סוכן` / `מאושרת לבצוע` / `בוצעה` / `שולמה` / `מבוטלת`
 - Postman collection reference: https://documenter.getpostman.com/view/30274649/2sB3QRmRt4
 
 ### AI backend — Azure OpenAI (Azure Foundry)
@@ -97,7 +99,7 @@ Every Priority ERP query is appended as a JSON line to `logs/priority-api-calls.
   "timestamp": "2026-03-04T10:45:12.034Z",
   "userQuestion": "מה הזמנות הפתוחות השבוע?",
   "entity": "ORDERS",
-  "params": { "filter": "BOOLCLOSED eq null", "select": "...", "top": 20 },
+  "params": { "filter": "BOOLCLOSED ne 'Y'", "select": "...", "top": 20 },
   "status": "success",
   "recordCount": 14,
   "durationMs": 438,
@@ -115,8 +117,22 @@ GET /api/logs?status=error      # filter by outcome
 GET /api/logs?limit=50          # change page size
 ```
 
+### Known field name corrections (confirmed against live API)
+
+| Entity | Wrong field | Correct field |
+|---|---|---|
+| LOGPART | `PARTTYPEDES` | `ZANA_PARTTYPEDES` |
+| LOGPART | `PRICELISTD` | `BASEPLPRICE` |
+| LOGPART | `UOMDES` | `UNITNAME` |
+| LOGPART | `FAMILY` | `FAMILYNAME` |
+| LOGPART | `WARNQUANT` | *(does not exist — remove)* |
+| CUSTOMERS | `AGENTDES` | *(does not exist — use `AGENTNAME`)* |
+| CUSTOMERS | `CITY` | *(does not exist — use `ADDRESS`)* |
+| AGENTS | `AGENTDES` | *(does not exist — `AGENTNAME` is both code and display name)* |
+
 ### Known issues / quirks
 
 - **IPv6 broken on this network** — `next.config.mjs` applies `dns.setDefaultResultOrder("ipv4first")` globally. Never remove this line; without it all outbound TLS connections (Azure OpenAI + Priority ERP) fail silently with ECONNRESET.
 - The Priority ERP API uses `Asia/Jerusalem` timezone (UTC+2/+3) — date filters must include timezone offset, e.g. `2026-01-01T00:00:00+02:00`.
 - The system prompt and UI are fully Hebrew / RTL. `app/layout.tsx` sets `<html lang="he" dir="rtl">`. Sidebar uses `borderLeft` (not `borderRight`) because RTL flex reverses child order.
+- **Priority OData does not support null comparisons** — `X eq null` / `X ne null` in `$filter` causes 500 or 400 errors. Use `STATDES eq 'פעיל'` for active records and `BOOLCLOSED ne 'Y'` for open records.

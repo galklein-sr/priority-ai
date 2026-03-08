@@ -87,8 +87,10 @@ type QueryParams = {
   filter?: string;
   select?: string;
   top?: number;
+  skip?: number;
   orderby?: string;
   expand?: string;
+  fetchAll?: boolean;
 };
 
 function buildErpUrl(entity: string, params: QueryParams): string {
@@ -96,9 +98,39 @@ function buildErpUrl(entity: string, params: QueryParams): string {
   if (params.filter) url.searchParams.set("$filter", params.filter);
   if (params.select) url.searchParams.set("$select", params.select);
   url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 20, 1), 50)));
+  if (params.skip && params.skip > 0) url.searchParams.set("$skip", String(params.skip));
   if (params.orderby) url.searchParams.set("$orderby", params.orderby);
   if (params.expand) url.searchParams.set("$expand", params.expand);
   return url.toString();
+}
+
+const PAGE_SIZE = 50;
+
+async function queryAllPages(
+  params: QueryParams,
+  onStatus: (message: string) => void,
+  onAlternative?: (failedEntity: string, nextEntity: string, errorMsg: string) => void
+): Promise<QueryResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allRecords: any[] = [];
+  let skipOffset = 0;
+  let lastResult: QueryResult | null = null;
+
+  while (true) {
+    const pageParams = { ...params, top: PAGE_SIZE, skip: skipOffset, fetchAll: undefined };
+    lastResult = await queryPriorityERP(pageParams, onAlternative);
+    const pageRecords = Array.isArray(lastResult.data?.value) ? lastResult.data.value : [];
+    allRecords.push(...pageRecords);
+    if (pageRecords.length < PAGE_SIZE) break;
+    skipOffset += PAGE_SIZE;
+    onStatus(`${params.entity}: טעינת ${allRecords.length} רשומות...`);
+  }
+
+  return {
+    data: { ...(lastResult?.data ?? {}), value: allRecords },
+    resolvedEntity: lastResult?.resolvedEntity ?? params.entity,
+    alternativesTried: lastResult?.alternativesTried ?? [],
+  };
 }
 
 async function queryPriorityERP(
@@ -169,19 +201,42 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 8. אם שאילתה לא מחזירה תוצאות, אמור זאת בבירור והצע סיבה אפשרית
 9. ענה תמיד בעברית — זו שפת הממשק של המשתמש
 
+**PAGING — FULL DATASET:**
+- The API returns max 50 records per call. When the user asks for "all", "complete list", "total", or needs aggregates across the full dataset, set fetchAll:true in the tool call. This automatically pages through all records.
+- For simple "show me some" or "latest N" requests, do NOT use fetchAll — use top:N instead.
+
+**CHARTS & GRAPHS:**
+When the user asks for a chart, graph, diagram, or visual representation, output a fenced code block with language "chart" containing JSON. The UI will render it automatically.
+
+Format:
+\`\`\`chart
+{"type":"bar","title":"כותרת הגרף","labels":["ינואר","פברואר","מרץ"],"datasets":[{"label":"הכנסות ₪","data":[120000,150000,80000]}]}
+\`\`\`
+
+- type: "bar" | "line" | "pie"
+- labels: array of category/axis labels
+- datasets: array of {label, data[], color?} — color is optional hex
+- For pie charts, use one dataset only; data values are the slice sizes
+- For multiple series (e.g. comparing two years), add multiple objects in datasets
+- Always include a descriptive title in Hebrew
+- Output the chart block AFTER any summary text, not before
+
 **ENTITY DISAMBIGUATION — CRITICAL:**
+- "סוכן" / "סוכנים" / "agent" / "agents" / "sales rep" / "salesperson" → use entity **AGENTS**
 - "הזמנות" / "orders" / sales orders → use entity **ORDERS** (sales orders from customers)
 - "הזמנות רכש" / "purchase orders" / orders to suppliers → use entity **PORDERS** (purchase orders to suppliers)
 - Never confuse these two. ORDERS = selling TO customers. PORDERS = buying FROM suppliers.
 
 **ODATA QUERY PATTERNS:**
-- Open orders: filter="BOOLCLOSED eq null"
+⚠️ NEVER use null in any filter expression — Priority OData does not support null comparisons and will crash or return errors.
+- Open orders: filter="BOOLCLOSED ne 'Y'"
 - Closed orders: filter="BOOLCLOSED eq 'Y'"
+- Order by status: filter="ORDSTATUSDES eq 'מאושרת לבצוע'"  (values: טיוטא / אושר מוקדנית / מאושר סוכן / מאושרת לבצוע / בוצעה / שולמה / מבוטלת)
 - Date range: filter="CURDATE ge 2026-01-01T00:00:00+02:00 and CURDATE le 2026-12-31T00:00:00+02:00"
-- Active customers: filter="INACTIVEFLAG eq null"
+- Active customers: filter="STATDES eq 'פעיל'"
 - Contains search: filter="contains(CUSTDES,'term')"
 - Specific order: filter="ORDNAME eq 'SO2600001'"
-- Multiple conditions: filter="BOOLCLOSED eq null and CURDATE ge 2026-01-01T00:00:00+02:00"
+- Multiple conditions: filter="BOOLCLOSED ne 'Y' and CURDATE ge 2026-01-01T00:00:00+02:00"
 - Sort newest first: orderby="CURDATE desc"
 - Specific customer's orders: filter="CUSTNAME eq '400204'"
 
@@ -207,7 +262,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           filter: {
             type: "string",
             description:
-              "OData $filter expression. Examples: \"BOOLCLOSED eq null\" or \"CURDATE ge 2026-01-01T00:00:00+02:00\" or \"CUSTNAME eq '400204'\" or \"contains(CUSTDES,'term')\"",
+              "OData $filter expression. Examples: \"BOOLCLOSED ne 'Y'\" or \"CURDATE ge 2026-01-01T00:00:00+02:00\" or \"CUSTNAME eq '400204'\" or \"contains(CUSTDES,'term')\". NEVER use null comparisons.",
           },
           select: {
             type: "string",
@@ -217,7 +272,17 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           top: {
             type: "number",
             description:
-              "Maximum number of records to return (1-50). Defaults to 20.",
+              "Maximum number of records to return (1-50). Defaults to 20. Ignored when fetchAll is true.",
+          },
+          skip: {
+            type: "number",
+            description:
+              "Number of records to skip for manual pagination (OData $skip). Use with top for manual paging. Prefer fetchAll:true for automatic full-dataset retrieval.",
+          },
+          fetchAll: {
+            type: "boolean",
+            description:
+              "When true, automatically pages through ALL records (ignores top, uses $skip internally). Use this when the user asks for complete/all data, full lists, or totals that require every record.",
           },
           orderby: {
             type: "string",
@@ -345,8 +410,10 @@ export async function POST(req: NextRequest) {
               filter?: string;
               select?: string;
               top?: number;
+              skip?: number;
               orderby?: string;
               expand?: string;
+              fetchAll?: boolean;
             };
 
             const entityLabel = input.filter
@@ -370,23 +437,14 @@ export async function POST(req: NextRequest) {
             };
 
             try {
-              const { data, resolvedEntity, alternativesTried } = await queryPriorityERP(
-                input,
-                (failedEntity, nextEntity, errMsg) => {
-                  send({
-                    type: "status",
-                    message: `"${failedEntity}" → 5xx, trying "${nextEntity}" instead`,
-                  });
-                  appendApiLog({
-                    ...logBase,
-                    status: "error",
-                    errorMessage: `[fallback] ${errMsg} → trying ${nextEntity}`,
-                    durationMs: Date.now() - callStart,
-                    resolvedEntity: failedEntity,
-                    alternativesTried,
-                  });
-                }
-              );
+              const onAlternative = (failedEntity: string, nextEntity: string, errMsg: string) => {
+                send({ type: "status", message: `"${failedEntity}" → 5xx, trying "${nextEntity}" instead` });
+                appendApiLog({ ...logBase, status: "error", errorMessage: `[fallback] ${errMsg} → trying ${nextEntity}`, durationMs: Date.now() - callStart, resolvedEntity: failedEntity, alternativesTried: [] });
+              };
+
+              const { data, resolvedEntity, alternativesTried } = input.fetchAll
+                ? await queryAllPages(input, (msg) => send({ type: "status", message: msg }), onAlternative)
+                : await queryPriorityERP(input, onAlternative);
 
               const records: unknown[] = Array.isArray(data?.value)
                 ? data.value

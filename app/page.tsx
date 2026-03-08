@@ -10,6 +10,12 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Image from "next/image";
+import {
+  BarChart, Bar,
+  LineChart, Line,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,6 +102,86 @@ const QUICK_QUERIES = [
   },
 ];
 
+// ─── Chart Renderer ──────────────────────────────────────────────────────────
+
+const CHART_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#A78BFA", "#F43F5E", "#FB923C", "#34D399", "#60A5FA"];
+
+type ChartDataset = { label: string; data: number[]; color?: string };
+type ChartSpec = {
+  type: "bar" | "line" | "pie";
+  title?: string;
+  labels: string[];
+  datasets: ChartDataset[];
+};
+
+function ChartRenderer({ raw }: { raw: string }) {
+  let spec: ChartSpec;
+  try {
+    spec = JSON.parse(raw) as ChartSpec;
+    if (!spec.labels || !spec.datasets?.length) throw new Error("invalid");
+  } catch {
+    return <pre className="text-xs text-rose-400 p-2">{raw}</pre>;
+  }
+
+  const chartData = spec.labels.map((label, i) => {
+    const point: Record<string, string | number> = { label };
+    spec.datasets.forEach((ds) => { point[ds.label] = ds.data[i] ?? 0; });
+    return point;
+  });
+
+  const tooltipStyle = {
+    backgroundColor: "#0E0E1E",
+    border: "1px solid #252540",
+    borderRadius: "8px",
+    color: "#C4C4DC",
+    fontFamily: "JetBrains Mono, monospace",
+    fontSize: "0.75rem",
+  };
+
+  return (
+    <div className="my-4 p-4 rounded-xl" style={{ background: "#0B0B18", border: "1px solid #1C1C35" }}>
+      {spec.title && (
+        <div className="text-sm font-semibold mb-3 text-right" style={{ color: "#C4C4DC", fontFamily: "Syne, sans-serif" }}>
+          {spec.title}
+        </div>
+      )}
+      <ResponsiveContainer width="100%" height={280}>
+        {spec.type === "pie" ? (
+          <PieChart>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Pie data={chartData} dataKey={spec.datasets[0].label} nameKey="label" cx="50%" cy="50%" outerRadius={100} label={({ label, percent }: any) => `${label} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+              {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={tooltipStyle} />
+          </PieChart>
+        ) : spec.type === "line" ? (
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1C1C35" />
+            <XAxis dataKey="label" tick={{ fill: "#50507A", fontSize: 11 }} />
+            <YAxis tick={{ fill: "#50507A", fontSize: 11 }} width={60} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Legend wrapperStyle={{ color: "#8888A8", fontSize: "0.75rem" }} />
+            {spec.datasets.map((ds, i) => (
+              <Line key={ds.label} type="monotone" dataKey={ds.label} stroke={ds.color ?? CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
+            ))}
+          </LineChart>
+        ) : (
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1C1C35" />
+            <XAxis dataKey="label" tick={{ fill: "#50507A", fontSize: 11 }} />
+            <YAxis tick={{ fill: "#50507A", fontSize: 11 }} width={70} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Legend wrapperStyle={{ color: "#8888A8", fontSize: "0.75rem" }} />
+            {spec.datasets.map((ds, i) => (
+              <Bar key={ds.label} dataKey={ds.label} fill={ds.color ?? CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} />
+            ))}
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ─── Markdown renderer ───────────────────────────────────────────────────────
 
 function MarkdownContent({ content }: { content: string }) {
@@ -104,6 +190,14 @@ function MarkdownContent({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          code({ className, children, ...props }: any) {
+            const lang = /language-(\w+)/.exec(className ?? "")?.[1];
+            if (lang === "chart") {
+              return <ChartRenderer raw={String(children).trim()} />;
+            }
+            return <code className={className} {...props}>{children}</code>;
+          },
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           table: ({ node, ...props }) => (
             <div className="table-wrapper">
@@ -577,6 +671,8 @@ export default function ChatPage() {
             { ...last, isStreaming: false, statusHistory: statuses },
           ];
         });
+        // Return focus to input after every response
+        setTimeout(() => textareaRef.current?.focus(), 50);
       }
     },
     [messages, input, isLoading, isMobile]
