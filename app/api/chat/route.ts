@@ -201,9 +201,15 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 8. אם שאילתה לא מחזירה תוצאות, אמור זאת בבירור והצע סיבה אפשרית
 9. ענה תמיד בעברית — זו שפת הממשק של המשתמש
 
-**PAGING — FULL DATASET:**
-- The API returns max 50 records per call. When the user asks for "all", "complete list", "total", or needs aggregates across the full dataset, set fetchAll:true in the tool call. This automatically pages through all records.
-- For simple "show me some" or "latest N" requests, do NOT use fetchAll — use top:N instead.
+**PAGING — WHEN TO USE fetchAll vs top+orderby:**
+- The API returns max 50 records per call.
+- **PREFER top+orderby+filter** for the vast majority of queries. If you can answer the question with filtering and sorting, always do so:
+  - "Top 10 customers by revenue" → orderby="TOTPRICE desc", top:10 (NOT fetchAll)
+  - "Best selling products" → orderby="QUANT desc", top:20 (NOT fetchAll)
+  - "Latest 5 orders" → orderby="CURDATE desc", top:5 (NOT fetchAll)
+  - "Most expensive products" → orderby="BASEPLPRICE desc", top:20 (NOT fetchAll)
+  - "Newest customers" → orderby="CUSTNAME desc", top:20 (NOT fetchAll)
+- **Use fetchAll:true ONLY when** the user explicitly asks for ALL records, a complete count/list, or when you must aggregate across the entire dataset (e.g. "how many customers do we have in total?", "list all open orders", "sum of all sales this year"). fetchAll fetches every record and is slow — avoid it whenever top+orderby suffices.
 
 **CHARTS & GRAPHS:**
 When the user asks for a chart, graph, diagram, or visual representation, output a fenced code block with language "chart" containing JSON. The UI will render it automatically.
@@ -282,7 +288,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           fetchAll: {
             type: "boolean",
             description:
-              "When true, automatically pages through ALL records (ignores top, uses $skip internally). Use this when the user asks for complete/all data, full lists, or totals that require every record.",
+              "When true, automatically pages through ALL records (ignores top, uses $skip internally). Use ONLY when the user explicitly needs every record (e.g. full list, total count across all data, complete aggregation). For ranked or limited queries ('top 10 customers', 'best selling products', 'latest orders'), ALWAYS use orderby+top instead — it is much faster.",
           },
           orderby: {
             type: "string",

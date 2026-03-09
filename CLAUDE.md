@@ -33,9 +33,9 @@ Browser (app/page.tsx)
 ### Key files
 
 - **`lib/erp-schema.ts`** — Single source of truth for ERP knowledge. Exports `ERP_ENTITIES` (entity/field definitions injected into `SYSTEM_PROMPT` via `buildSchemaReference()`) and `ENTITY_ALIASES` (maps wrong/alternate entity names to correct ones for the fallback retry system). Edit this file to add entities or update field descriptions.
-- **`app/api/chat/route.ts`** — The entire backend. Defines `buildErpUrl`/`queryPriorityERP` (with alias-fallback on 5xx), the `SYSTEM_PROMPT` built from `buildSchemaReference()`, the `query_priority_erp` tool schema, and the SSE streaming POST handler with agentic loop (max 8 iterations). Also contains the API call logger (`appendApiLog`, `extractUserQuestion`).
+- **`app/api/chat/route.ts`** — The entire backend. Defines `buildErpUrl`/`queryPriorityERP` (with alias-fallback on 5xx) and `queryAllPages` (automatic multi-page fetch), the `SYSTEM_PROMPT` built from `buildSchemaReference()`, the `query_priority_erp` tool schema (supports `fetchAll`, `skip`), and the SSE streaming POST handler with agentic loop (max 8 iterations). Also contains the API call logger (`appendApiLog`, `extractUserQuestion`).
 - **`app/api/logs/route.ts`** — `GET /api/logs` endpoint for reading the JSONL log. Supports `?entity=ORDERS`, `?status=error`, `?limit=N` query params. Returns entries newest-first plus aggregate stats.
-- **`app/page.tsx`** — Single `"use client"` component (~900 lines). Contains all UI: `WelcomeScreen`, `MarkdownContent` (react-markdown + remark-gfm), `MessageBubble`, `StatusIndicator`, sidebar with `QUICK_QUERIES`, and the SSE parsing loop.
+- **`app/page.tsx`** — Single `"use client"` component. Contains all UI: `WelcomeScreen`, `ChartRenderer` (recharts bar/line/pie), `MarkdownContent` (react-markdown + remark-gfm + chart code block interception), `MessageBubble`, `StatusIndicator`, sidebar with `QUICK_QUERIES`, and the SSE parsing loop. Textarea auto-focuses after each response.
 - **`app/globals.css`** — Imports Syne + JetBrains Mono from Google Fonts, defines the dark industrial theme via CSS variables, markdown table styles (`.markdown-body`), and scan-line animation.
 - **`tailwind.config.ts`** — Custom color palette: `bg` (#06060F), `surface`, `border`, amber/emerald/rose/blue ERP accent colors. Font families: `font-sans` = Syne, `font-mono` = JetBrains Mono.
 - **`next.config.mjs`** — Sets `dns.setDefaultResultOrder("ipv4first")` at module load time. This is critical — IPv6 is broken on the deployment network; without this fix all outbound HTTPS connections (Azure OpenAI + Priority ERP) fail with ECONNRESET.
@@ -45,7 +45,7 @@ Browser (app/page.tsx)
 - **Base URL**: `https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/moftov`
 - **Auth**: HTTP Basic (`PRIORITY_USERNAME:PRIORITY_PASSWORD`)
 - **Protocol**: OData v4 — standard `$filter`, `$select`, `$top`, `$orderby`, `$expand` params
-- **`$top` is capped at 50** in `queryPriorityERP`
+- **`$top` is capped at 50** per page; use `fetchAll:true` in the tool call to auto-page all records via `queryAllPages()`
 - Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `AGENTS` (sales reps), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
 - Full entity list: `GET /odata/priority/tabula.ini/moftov/` with Basic auth → JSON `{value:[{name,kind,url}]}`
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
@@ -116,6 +116,24 @@ GET /api/logs?entity=ORDERS     # filter by entity
 GET /api/logs?status=error      # filter by outcome
 GET /api/logs?limit=50          # change page size
 ```
+
+### Paging / full-dataset queries
+
+The `query_priority_erp` tool exposes two pagination mechanisms:
+- `fetchAll: true` — calls `queryAllPages()` which loops with `$skip=0,50,100...` until a page has < 50 records; use for "all orders", totals, full-list requests
+- `skip: N` + `top: M` — manual pagination for the caller
+
+### Chart rendering
+
+The model outputs ` ```chart ` fenced code blocks containing JSON; `ChartRenderer` in `app/page.tsx` renders them with **recharts**.
+
+Supported chart spec:
+```json
+{"type":"bar","title":"כותרת","labels":["א","ב"],"datasets":[{"label":"סדרה","data":[100,200],"color":"#F59E0B"}]}
+```
+- `type`: `"bar"` | `"line"` | `"pie"`
+- `datasets[].color` is optional; defaults to theme palette
+- Styled to match the dark industrial theme
 
 ### Known field name corrections (confirmed against live API)
 

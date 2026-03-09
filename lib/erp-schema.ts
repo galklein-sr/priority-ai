@@ -213,7 +213,7 @@ const INVOICES: EntityDef = {
   queryTips: [
     "Unpaid invoices: filter=\"BOOLCLOSED ne 'Y'\"",
     "By customer: filter=\"CUSTNAME eq '400204'\"",
-    "Overdue: filter=\"BOOLCLOSED eq null and DUEDATE lt 2026-03-01T00:00:00+02:00\"",
+    "Overdue: filter=\"BOOLCLOSED ne 'Y' and DUEDATE lt 2026-03-01T00:00:00+02:00\"",
   ],
 };
 

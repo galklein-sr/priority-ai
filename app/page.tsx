@@ -692,7 +692,7 @@ export default function ChatPage() {
 
   return (
     <div
-      className="flex h-screen overflow-hidden scanline"
+      className="flex h-dvh overflow-hidden scanline"
       style={{ background: "var(--bg)" }}
     >
       {/* ── Mobile backdrop (tap to close sidebar) ──────────────────────── */}
