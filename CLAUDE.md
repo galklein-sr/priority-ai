@@ -42,12 +42,12 @@ Browser (app/page.tsx)
 
 ### Priority ERP API
 
-- **Base URL**: `https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/moftov`
+- **Base URL**: `https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/otttt`
 - **Auth**: HTTP Basic (`PRIORITY_USERNAME:PRIORITY_PASSWORD`)
 - **Protocol**: OData v4 — standard `$filter`, `$select`, `$top`, `$orderby`, `$expand` params
 - **`$top` is capped at 50** per page; use `fetchAll:true` in the tool call to auto-page all records via `queryAllPages()`
 - Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `AGENTS` (sales reps), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
-- Full entity list: `GET /odata/priority/tabula.ini/moftov/` with Basic auth → JSON `{value:[{name,kind,url}]}`
+- Full entity list: `GET /odata/priority/tabula.ini/otttt/` with Basic auth → JSON `{value:[{name,kind,url}]}`
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
 - Open orders: `BOOLCLOSED ne 'Y'`; closed: `BOOLCLOSED eq 'Y'` — **never use null in filters** (causes 500)
 - Active customers/items: `STATDES eq 'פעיל'` — **never** `INACTIVEFLAG eq null`

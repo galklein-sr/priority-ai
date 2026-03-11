@@ -69,7 +69,7 @@ const client = new AzureOpenAI({
 
 const PRIORITY_BASE_URL =
   process.env.PRIORITY_BASE_URL ||
-  "https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/moftov";
+  "https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/otttt";
 
 const PRIORITY_CREDS = Buffer.from(
   `${process.env.PRIORITY_USERNAME || "6AAE9884207242A0B371BE5C7B5DB639"}:${process.env.PRIORITY_PASSWORD || "PAT"}`
@@ -97,14 +97,14 @@ function buildErpUrl(entity: string, params: QueryParams): string {
   const url = new URL(`${PRIORITY_BASE_URL}/${entity}`);
   if (params.filter) url.searchParams.set("$filter", params.filter);
   if (params.select) url.searchParams.set("$select", params.select);
-  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 20, 1), 50)));
+  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 20, 1), 200)));
   if (params.skip && params.skip > 0) url.searchParams.set("$skip", String(params.skip));
   if (params.orderby) url.searchParams.set("$orderby", params.orderby);
   if (params.expand) url.searchParams.set("$expand", params.expand);
   return url.toString();
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 200;
 
 async function queryAllPages(
   params: QueryParams,
@@ -202,7 +202,7 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
 9. ענה תמיד בעברית — זו שפת הממשק של המשתמש
 
 **PAGING — WHEN TO USE fetchAll vs top+orderby:**
-- The API returns max 50 records per call.
+- The API supports up to 200 records per call (use top:200 for large requests).
 - **PREFER top+orderby+filter** for the vast majority of queries. If you can answer the question with filtering and sorting, always do so:
   - "Top 10 customers by revenue" → orderby="TOTPRICE desc", top:10 (NOT fetchAll)
   - "Best selling products" → orderby="QUANT desc", top:20 (NOT fetchAll)
@@ -210,6 +210,17 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
   - "Most expensive products" → orderby="BASEPLPRICE desc", top:20 (NOT fetchAll)
   - "Newest customers" → orderby="CUSTNAME desc", top:20 (NOT fetchAll)
 - **Use fetchAll:true ONLY when** the user explicitly asks for ALL records, a complete count/list, or when you must aggregate across the entire dataset (e.g. "how many customers do we have in total?", "list all open orders", "sum of all sales this year"). fetchAll fetches every record and is slow — avoid it whenever top+orderby suffices.
+
+**QUERY OPTIMIZATION — ALWAYS apply these principles:**
+1. **Filter first, page second**: Always add the tightest possible `$filter` before considering fetchAll. Even when fetchAll is true, a filter dramatically reduces how many pages are fetched. Example: "כמה הזמנות פתוחות יש ב-2026?" → filter="BOOLCLOSED ne 'Y' and CURDATE ge 2026-01-01T00:00:00+02:00" with fetchAll:true (NOT fetchAll with no filter across all years).
+2. **Always include orderby for stable paging**: When fetchAll is used (multi-page), always add an orderby so pages are deterministic and records don't repeat or skip across pages. Use the most relevant date field: orderby="CURDATE desc" for orders/invoices, orderby="CUSTNAME" for customers, orderby="PARTNAME" for products.
+3. **Narrow the select**: Always include a select list with only the fields you need. Smaller payloads = faster responses.
+4. **Prefer a single well-crafted query over multiple sequential queries**: Use `$expand` or combine filters rather than querying the same entity multiple times with different filters.
+5. **Decision tree for any paging need**:
+   - Can filtering + sorting answer it? → Use filter+orderby+top (fastest, no paging needed)
+   - Need all matching records? → Use fetchAll:true WITH a filter to limit scope
+   - Need a count across filtered records? → fetchAll:true with the filter, then count the results
+   - Never fetchAll without a filter unless the user explicitly requests all records with no conditions
 
 **CHARTS & GRAPHS:**
 When the user asks for a chart, graph, diagram, or visual representation, output a fenced code block with language "chart" containing JSON. The UI will render it automatically.
@@ -230,8 +241,12 @@ Format:
 **ENTITY DISAMBIGUATION — CRITICAL:**
 - "סוכן" / "סוכנים" / "agent" / "agents" / "sales rep" / "salesperson" → use entity **AGENTS**
 - "הזמנות" / "orders" / sales orders → use entity **ORDERS** (sales orders from customers)
-- "הזמנות רכש" / "purchase orders" / orders to suppliers → use entity **PORDERS** (purchase orders to suppliers)
-- Never confuse these two. ORDERS = selling TO customers. PORDERS = buying FROM suppliers.
+- "מלאי" / "יתרות" / "stock" / "inventory balance" → use entity **PARTBAL**
+- "החזרות" / "זיכויים" / "credit notes" / "returns" → use entity **DOCUMENTS_N**
+- "מחסן" / "מחסנים" / "warehouse" → use entity **WAREHOUSES**
+- "מחירון" / "price list" → use entity **PRICELIST**
+- "אצוות" / "מספרים סידוריים" / "batch" / "serial" → use entity **SERIAL**
+- NOTE: SUPPLIERS and PORDERS are NOT available in this environment — do not attempt to query them.
 
 **ODATA QUERY PATTERNS:**
 ⚠️ NEVER use null in any filter expression — Priority OData does not support null comparisons and will crash or return errors.
@@ -263,7 +278,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           entity: {
             type: "string",
             description:
-              "The entity/table to query. Options: CUSTOMERS, ORDERS (sales orders from customers), LOGPART (products), AGENTS (sales reps), SUPPLIERS, PORDERS (purchase orders to suppliers), DOCUMENTS_D (delivery notes), ACCBAL (account balances), INVOICES. IMPORTANT: use ORDERS for sales orders, PORDERS for purchase orders — never swap them.",
+              "The entity/table to query. Options: CUSTOMERS, ORDERS (sales orders), LOGPART (products/items), AGENTS (sales reps), INVOICES (AINVOICES), DOCUMENTS_D (delivery notes), DOCUMENTS_N (credit notes/returns), ACCBAL (account balances), PARTBAL (inventory stock levels), WAREHOUSES, PRICELIST, SERIAL (batch/serial numbers). NOTE: SUPPLIERS and PORDERS are not enabled in this environment.",
           },
           filter: {
             type: "string",
@@ -278,7 +293,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           top: {
             type: "number",
             description:
-              "Maximum number of records to return (1-50). Defaults to 20. Ignored when fetchAll is true.",
+              "Maximum number of records to return (1-200). Defaults to 20. Ignored when fetchAll is true.",
           },
           skip: {
             type: "number",

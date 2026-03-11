@@ -145,51 +145,132 @@ const LOGPART: EntityDef = {
   ],
 };
 
-// ─── SUPPLIERS ────────────────────────────────────────────────────────────────
+// ─── PARTBAL (Inventory Balances) ─────────────────────────────────────────────
 
-const SUPPLIERS: EntityDef = {
-  name: "SUPPLIERS",
-  hebrewName: "ספקים",
-  description: "Supplier master data — companies and individuals from whom goods or services are purchased.",
+const PARTBAL: EntityDef = {
+  name: "PARTBAL",
+  hebrewName: "יתרות מלאי",
+  description: "Inventory stock balances per part and warehouse. Shows current on-hand quantities.",
   fields: [
-    { name: "SUPNAME",  hebrewName: "מספר ספק",    type: "string",  description: "Unique supplier code" },
-    { name: "SUPDES",   hebrewName: "שם ספק",      type: "string",  description: "Supplier name" },
-    { name: "AGENTNAME",hebrewName: "איש קשר",     type: "string",  description: "Contact / purchasing agent" },
-    { name: "EMAIL",    hebrewName: "אימייל",        type: "string",  description: "Supplier email address" },
-    { name: "PHONE",    hebrewName: "טלפון",         type: "string",  description: "Supplier phone number" },
-    { name: "ADDRESS",  hebrewName: "כתובת",         type: "string",  description: "Street address" },
-    { name: "CITY",     hebrewName: "עיר",           type: "string",  description: "City" },
-    { name: "PAYDES",   hebrewName: "תנאי תשלום",    type: "string",  description: "Payment terms (e.g. 'שוטף + 60')" },
-    { name: "OBCODE",   hebrewName: "מטבע",          type: "string",  description: "Default currency for purchases from this supplier" },
+    { name: "PARTNAME",   hebrewName: "קוד פריט",      type: "string",  description: "Product/item code (FK to LOGPART)" },
+    { name: "PARTDES",    hebrewName: "תיאור פריט",    type: "string",  description: "Product description" },
+    { name: "WARHSNAME",  hebrewName: "מחסן",           type: "string",  description: "Warehouse code" },
+    { name: "BALANCE",    hebrewName: "יתרה",            type: "number",  description: "Current stock balance quantity" },
+    { name: "TBALANCE",   hebrewName: "יתרה כוללת",     type: "number",  description: "Total balance including reserved stock" },
+    { name: "UNITNAME",   hebrewName: "יחידת מידה",     type: "string",  description: "Unit of measure" },
+    { name: "LASTDATE",   hebrewName: "תאריך תנועה אחרון", type: "date", description: "Date of last inventory movement" },
+    { name: "EXPIRYDATE", hebrewName: "תפוגה",           type: "date",    description: "Expiry date (for perishable items)" },
+    { name: "LOCNAME",    hebrewName: "מיקום",           type: "string",  description: "Location code within the warehouse" },
+    { name: "SERIALNAME", hebrewName: "מס סידורי",      type: "string",  description: "Serial / batch number" },
   ],
   queryTips: [
-    "Search supplier: filter=\"contains(SUPDES,'שם ספק')\"",
-    "Get by code: filter=\"SUPNAME eq 'SUP001'\"",
+    "Stock for a specific item: filter=\"PARTNAME eq 'CHICK-001'\"",
+    "All items in warehouse: filter=\"WARHSNAME eq 'MAIN'\"",
+    "Items with stock: filter=\"BALANCE gt 0\"",
+    "Low stock (below threshold): orderby=\"BALANCE asc\"",
+    "Search by product name: filter=\"contains(PARTDES,'עוף')\"",
   ],
 };
 
-// ─── PORDERS (Purchase Orders) ────────────────────────────────────────────────
+// ─── WAREHOUSES ───────────────────────────────────────────────────────────────
 
-const PORDERS: EntityDef = {
-  name: "PORDERS",
-  hebrewName: "הזמנות רכש",
-  description: "Purchase orders sent to suppliers. Each row is one PO header.",
+const WAREHOUSES: EntityDef = {
+  name: "WAREHOUSES",
+  hebrewName: "מחסנים",
+  description: "Warehouse master data — all storage locations and distribution sites.",
   fields: [
-    { name: "PORDNAME",     hebrewName: "מספר הזמנת רכש", type: "string",  description: "Purchase order number", example: "PO2600001" },
-    { name: "SUPNAME",      hebrewName: "מספר ספק",       type: "string",  description: "Supplier code (FK to SUPPLIERS)" },
-    { name: "SDES",         hebrewName: "שם ספק",          type: "string",  description: "Supplier name (denormalized)" },
-    { name: "CURDATE",      hebrewName: "תאריך הזמנה",    type: "date",    description: "PO creation date" },
-    { name: "DUEDATE",      hebrewName: "תאריך אספקה",    type: "date",    description: "Expected delivery date from supplier" },
-    { name: "TOTPRICE",     hebrewName: "סכום כולל",       type: "number",  description: "Total PO value" },
-    { name: "CODE",         hebrewName: "מטבע",             type: "string",  description: "Currency code" },
-    { name: "BOOLCLOSED",                                   type: "enum",    description: "'Y' = closed PO; absent/empty = open. Use filter='BOOLCLOSED ne ''Y''' for open POs. NEVER use null in filters." },
-    { name: "AGENTNAME",   hebrewName: "רוכש",             type: "string",  description: "Purchasing agent who created the PO" },
-    { name: "DETAILS",     hebrewName: "הערות",             type: "string",  description: "Free-text notes" },
+    { name: "WARHSNAME",  hebrewName: "קוד מחסן",      type: "string",  description: "Unique warehouse code / ID" },
+    { name: "WARHSDES",   hebrewName: "שם מחסן",        type: "string",  description: "Warehouse description/name" },
+    { name: "EWARHSDES",  hebrewName: "שם באנגלית",     type: "string",  description: "Warehouse name in English" },
+    { name: "TYPE",       hebrewName: "סוג",             type: "string",  description: "Warehouse type code" },
+    { name: "ADDRESS",    hebrewName: "כתובת",           type: "string",  description: "Physical address of the warehouse" },
+    { name: "INACTIVE",   hebrewName: "לא פעיל",         type: "enum",    description: "'Y' = inactive warehouse. NEVER use null in filters." },
+    { name: "SELLFLAG",   hebrewName: "מחסן מכירה",     type: "enum",    description: "'Y' = selling warehouse (used for sales orders)" },
+    { name: "BRANCHNAME", hebrewName: "סניף",            type: "string",  description: "Branch associated with this warehouse" },
   ],
   queryTips: [
-    "Open purchase orders: filter=\"BOOLCLOSED ne 'Y'\"",
-    "By supplier: filter=\"SUPNAME eq 'SUP001'\"",
-    "Recent POs: orderby=\"CURDATE desc\"",
+    "Active warehouses only: avoid INACTIVE eq null — omit filter or use INACTIVE ne 'Y'",
+    "Selling warehouses: filter=\"SELLFLAG eq 'Y'\"",
+    "Search by name: filter=\"contains(WARHSDES,'מרכזי')\"",
+  ],
+};
+
+// ─── PRICELIST ────────────────────────────────────────────────────────────────
+
+const PRICELIST: EntityDef = {
+  name: "PRICELIST",
+  hebrewName: "מחירונים",
+  description: "Price list master data — defines different pricing schemes for customers or product groups.",
+  fields: [
+    { name: "PLNAME",     hebrewName: "קוד מחירון",    type: "string",  description: "Price list code / ID" },
+    { name: "PLDES",      hebrewName: "שם מחירון",      type: "string",  description: "Price list description" },
+    { name: "EPLDES",     hebrewName: "שם באנגלית",     type: "string",  description: "Price list name in English" },
+    { name: "PLDATE",     hebrewName: "תאריך תחילה",    type: "date",    description: "Effective start date of the price list" },
+    { name: "EXPIRYDATE", hebrewName: "תאריך פקיעה",   type: "date",    description: "Expiry date of the price list" },
+    { name: "STATDES",    hebrewName: "סטטוס",           type: "string",  description: "Price list status (e.g. 'פעיל')" },
+  ],
+  queryTips: [
+    "Active price lists: filter=\"STATDES eq 'פעיל'\"",
+    "Valid today: filter=\"PLDATE le 2026-03-11T00:00:00+02:00 and EXPIRYDATE ge 2026-03-11T00:00:00+02:00\"",
+    "Search by name: filter=\"contains(PLDES,'מחירון')\"",
+  ],
+};
+
+// ─── SERIAL (Serial / Batch Numbers) ─────────────────────────────────────────
+
+const SERIAL: EntityDef = {
+  name: "SERIAL",
+  hebrewName: "מספרים סידוריים / אצוות",
+  description: "Serial numbers and production batches for tracked inventory items.",
+  fields: [
+    { name: "SERIALNAME",      hebrewName: "מס סידורי",      type: "string",  description: "Serial or batch number" },
+    { name: "PARTNAME",        hebrewName: "קוד פריט",        type: "string",  description: "Product code (FK to LOGPART)" },
+    { name: "PARTDES",         hebrewName: "תיאור פריט",      type: "string",  description: "Product description" },
+    { name: "QUANT",           hebrewName: "כמות",             type: "number",  description: "Quantity in this batch/serial" },
+    { name: "UNITNAME",        hebrewName: "יחידת מידה",      type: "string",  description: "Unit of measure" },
+    { name: "PSDATE",          hebrewName: "תאריך ייצור",     type: "date",    description: "Production / start date" },
+    { name: "EXPIRYDATE",      hebrewName: "תאריך תפוגה",     type: "date",    description: "Expiry / best-before date" },
+    { name: "SERIALSTATUSDES", hebrewName: "סטטוס",            type: "string",  description: "Status of this serial/batch" },
+    { name: "CLOSEDBOOL",      hebrewName: "סגור",             type: "enum",    description: "'Y' = closed/consumed batch; absent = open. NEVER use null in filters." },
+    { name: "ORDNAME",         hebrewName: "הזמנה",            type: "string",  description: "Sales order linked to this serial" },
+    { name: "IWARHSNAME",      hebrewName: "מחסן",             type: "string",  description: "Warehouse where this item is stored" },
+  ],
+  queryTips: [
+    "Open/active batches: filter=\"CLOSEDBOOL ne 'Y'\"",
+    "Expiring soon: filter=\"EXPIRYDATE le 2026-03-31T00:00:00+02:00 and CLOSEDBOOL ne 'Y'\"",
+    "By product: filter=\"PARTNAME eq 'CHICK-001'\"",
+    "Newest first: orderby=\"PSDATE desc\"",
+  ],
+};
+
+// ─── DOCUMENTS_N (Credit Notes / Returns) ────────────────────────────────────
+
+const DOCUMENTS_N: EntityDef = {
+  name: "DOCUMENTS_N",
+  hebrewName: "חשבוניות זיכוי / החזרות",
+  description: "Credit notes and return documents — issued when goods are returned by customers or credits are granted.",
+  fields: [
+    { name: "DOCNO",      hebrewName: "מספר מסמך",     type: "string",  description: "Credit note / return document number" },
+    { name: "CUSTNAME",   hebrewName: "מספר לקוח",     type: "string",  description: "Customer code" },
+    { name: "CDES",       hebrewName: "שם לקוח",        type: "string",  description: "Customer name" },
+    { name: "CURDATE",    hebrewName: "תאריך",          type: "date",    description: "Document date" },
+    { name: "TOTPRICE",   hebrewName: "סכום כולל",      type: "number",  description: "Total credit/return value" },
+    { name: "DISPRICE",   hebrewName: "לפני מע\"מ",     type: "number",  description: "Amount before VAT" },
+    { name: "CODE",       hebrewName: "מטבע",            type: "string",  description: "Currency code" },
+    { name: "AGENTNAME",  hebrewName: "סוכן",            type: "string",  description: "Sales agent code" },
+    { name: "STATDES",    hebrewName: "סטטוס",           type: "string",  description: "Document status" },
+    { name: "ORDNAME",    hebrewName: "הזמנה מקורית",   type: "string",  description: "Original sales order reference" },
+    { name: "IVNUM",      hebrewName: "חשבונית מקורית", type: "string",  description: "Original invoice number" },
+    { name: "DETAILS",    hebrewName: "הערות",            type: "string",  description: "Free-text notes / reason for return" },
+    { name: "PARTNAME",   hebrewName: "קוד פריט",        type: "string",  description: "Product code (for single-item returns)" },
+    { name: "PARTDES",    hebrewName: "תיאור פריט",      type: "string",  description: "Product description" },
+    { name: "TOTQUANT",   hebrewName: "כמות",             type: "number",  description: "Total quantity returned" },
+  ],
+  queryTips: [
+    "Recent credit notes: orderby=\"CURDATE desc\"",
+    "By customer: filter=\"CUSTNAME eq '400204'\"",
+    "By agent: filter=\"AGENTNAME eq 'COHEN'\"",
+    "This month: filter=\"CURDATE ge 2026-03-01T00:00:00+02:00\"",
   ],
 };
 
@@ -314,12 +395,6 @@ export const ENTITY_ALIASES: Record<string, string[]> = {
   SHIPMENTS:        ['DOCUMENTS_D'],
   DELIVERY:         ['DOCUMENTS_D'],
 
-  // ── Purchase Orders ──────────────────────────────────────────────────────
-  PURCHORDERS:      ['PORDERS'],
-  PURCHASEORDERS:   ['PORDERS'],
-  PURCHASE_ORDERS:  ['PORDERS'],
-  PURCHORD:         ['PORDERS'],
-
   // ── Sales Agents / Representatives ───────────────────────────────────────
   AGENT:            ['AGENTS'],
   SALESREP:         ['AGENTS'],
@@ -334,16 +409,35 @@ export const ENTITY_ALIASES: Record<string, string[]> = {
   CLIENT:           ['CUSTOMERS'],
   CUSTOMER:         ['CUSTOMERS'],
 
-  // ── Suppliers / Vendors ──────────────────────────────────────────────────
-  VENDOR:           ['SUPPLIERS'],
-  VENDORS:          ['SUPPLIERS'],
-  SUPPLIER:         ['SUPPLIERS'],
-
   // ── Account Balances ─────────────────────────────────────────────────────
   BALANCE:          ['ACCBAL'],
   BALANCES:         ['ACCBAL'],
   ACCOUNTBALANCE:   ['ACCBAL'],
   ACCBALANCES:      ['ACCBAL'],
+
+  // ── Inventory Balances ───────────────────────────────────────────────────
+  STOCK:            ['PARTBAL'],
+  INVENTORY_BAL:    ['PARTBAL'],
+  STOCKBALANCE:     ['PARTBAL'],
+
+  // ── Credit Notes / Returns ───────────────────────────────────────────────
+  CREDITNOTES:      ['DOCUMENTS_N'],
+  RETURNS:          ['DOCUMENTS_N'],
+  CREDITNOTE:       ['DOCUMENTS_N'],
+
+  // ── Warehouses ───────────────────────────────────────────────────────────
+  WAREHOUSE:        ['WAREHOUSES'],
+  WARHS:            ['WAREHOUSES'],
+
+  // ── Price Lists ──────────────────────────────────────────────────────────
+  PRICELISTS:       ['PRICELIST'],
+  PRICES:           ['PRICELIST'],
+
+  // ── Serial / Batch Numbers ───────────────────────────────────────────────
+  SERIALS:          ['SERIAL'],
+  BATCHES:          ['SERIAL'],
+  BATCH:            ['SERIAL'],
+  SERNUMBERS:       ['SERIAL'],
 };
 
 // ─── Exported registry ────────────────────────────────────────────────────────
@@ -354,11 +448,14 @@ export const ERP_ENTITIES: Record<string, EntityDef> = {
   ORDERITEMS_SUBFORM: ORDERITEMS,
   LOGPART,
   AGENTS,
-  SUPPLIERS,
-  PORDERS,
   INVOICES,
   DOCUMENTS_D,
+  DOCUMENTS_N,
   ACCBAL,
+  PARTBAL,
+  WAREHOUSES,
+  PRICELIST,
+  SERIAL,
 };
 
 /**
