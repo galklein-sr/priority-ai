@@ -97,7 +97,7 @@ function buildErpUrl(entity: string, params: QueryParams): string {
   const url = new URL(`${PRIORITY_BASE_URL}/${entity}`);
   if (params.filter) url.searchParams.set("$filter", params.filter);
   if (params.select) url.searchParams.set("$select", params.select);
-  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 20, 1), 200)));
+  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 50, 1), 200)));
   if (params.skip && params.skip > 0) url.searchParams.set("$skip", String(params.skip));
   if (params.orderby) url.searchParams.set("$orderby", params.orderby);
   if (params.expand) url.searchParams.set("$expand", params.expand);
@@ -211,16 +211,26 @@ const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת
   - "Newest customers" → orderby="CUSTNAME desc", top:20 (NOT fetchAll)
 - **Use fetchAll:true ONLY when** the user explicitly asks for ALL records, a complete count/list, or when you must aggregate across the entire dataset (e.g. "how many customers do we have in total?", "list all open orders", "sum of all sales this year"). fetchAll fetches every record and is slow — avoid it whenever top+orderby suffices.
 
+**DATE PERIOD TRANSLATION — CRITICAL:**
+Whenever the user mentions a time period, you MUST convert it to explicit OData date range filter before calling the tool. NEVER fetchAll across all time — always bound the date range.
+- "רבעון אחרון של 2025" / "Q4 2025" → filter includes: CURDATE ge 2025-10-01T00:00:00+02:00 and CURDATE lt 2026-01-01T00:00:00+02:00
+- "2025" / "שנת 2025" → CURDATE ge 2025-01-01T00:00:00+02:00 and CURDATE lt 2026-01-01T00:00:00+02:00
+- "החודש" / "this month" (March 2026) → CURDATE ge 2026-03-01T00:00:00+02:00 and CURDATE lt 2026-04-01T00:00:00+02:00
+- "השבוע" / "this week" → CURDATE ge [start of week] and CURDATE lt [end of week]
+- "היום" / "today" → CURDATE ge [today]T00:00:00+02:00 and CURDATE lt [tomorrow]T00:00:00+02:00
+- "רבעון ראשון" Q1 → Jan 1–Mar 31; Q2 → Apr 1–Jun 30; Q3 → Jul 1–Sep 30; Q4 → Oct 1–Dec 31
+Always use +02:00 timezone offset (Israel Standard Time; use +03:00 only for Israeli summer time Apr–Oct).
+
 **QUERY OPTIMIZATION — ALWAYS apply these principles:**
-1. **Filter first, page second**: Always add the tightest possible `$filter` before considering fetchAll. Even when fetchAll is true, a filter dramatically reduces how many pages are fetched. Example: "כמה הזמנות פתוחות יש ב-2026?" → filter="BOOLCLOSED ne 'Y' and CURDATE ge 2026-01-01T00:00:00+02:00" with fetchAll:true (NOT fetchAll with no filter across all years).
+1. **Filter first, page second**: Always add the tightest possible filter before considering fetchAll. Even when fetchAll is true, a filter dramatically reduces how many pages are fetched. A time-period report MUST include a date range filter — never fetchAll with no date bounds.
 2. **Always include orderby for stable paging**: When fetchAll is used (multi-page), always add an orderby so pages are deterministic and records don't repeat or skip across pages. Use the most relevant date field: orderby="CURDATE desc" for orders/invoices, orderby="CUSTNAME" for customers, orderby="PARTNAME" for products.
 3. **Narrow the select**: Always include a select list with only the fields you need. Smaller payloads = faster responses.
-4. **Prefer a single well-crafted query over multiple sequential queries**: Use `$expand` or combine filters rather than querying the same entity multiple times with different filters.
+4. **Prefer a single well-crafted query over multiple sequential queries**: Use $expand or combine filters rather than querying the same entity multiple times with different filters.
 5. **Decision tree for any paging need**:
+   - Has a time period? → Convert to date range filter FIRST, then decide on top vs fetchAll
    - Can filtering + sorting answer it? → Use filter+orderby+top (fastest, no paging needed)
-   - Need all matching records? → Use fetchAll:true WITH a filter to limit scope
-   - Need a count across filtered records? → fetchAll:true with the filter, then count the results
-   - Never fetchAll without a filter unless the user explicitly requests all records with no conditions
+   - Need all matching records in a period? → Use fetchAll:true WITH the date range filter
+   - Never fetchAll without a date/status filter unless explicitly asked for all-time data
 
 **CHARTS & GRAPHS:**
 When the user asks for a chart, graph, diagram, or visual representation, output a fenced code block with language "chart" containing JSON. The UI will render it automatically.
@@ -293,7 +303,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           top: {
             type: "number",
             description:
-              "Maximum number of records to return (1-200). Defaults to 20. Ignored when fetchAll is true.",
+              "Maximum number of records to return (1-200). Defaults to 50. For list/browse queries use 100-200. Ignored when fetchAll is true.",
           },
           skip: {
             type: "number",
