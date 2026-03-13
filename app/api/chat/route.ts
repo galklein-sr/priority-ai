@@ -333,6 +333,22 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   },
 ];
 
+// Maximum characters of JSON to include in a tool result message.
+// Prevents large ERP responses from blowing up the context window.
+const MAX_TOOL_RESULT_CHARS = 80_000; // ~20k tokens
+
+function truncateToolResult(jsonStr: string, recordCount: number): string {
+  if (jsonStr.length <= MAX_TOOL_RESULT_CHARS) return jsonStr;
+  const truncated = jsonStr.slice(0, MAX_TOOL_RESULT_CHARS);
+  // Find last complete JSON object boundary to avoid corrupt JSON
+  const lastBrace = truncated.lastIndexOf("},");
+  const safe = lastBrace > 0 ? truncated.slice(0, lastBrace + 1) + "]}" : truncated;
+  return safe + `\n\n[NOTE: Response truncated — showing partial data (~${MAX_TOOL_RESULT_CHARS} chars) out of ${recordCount} total records. Summarize from the data available above.]`;
+}
+
+// Keep only the last N user/assistant message pairs to limit history tokens.
+const MAX_HISTORY_MESSAGES = 10; // 5 exchanges
+
 export async function POST(req: NextRequest) {
   const { messages } = (await req.json()) as { messages: SimpleMessage[] };
 
@@ -351,11 +367,16 @@ export async function POST(req: NextRequest) {
       };
 
       try {
+        // Trim history to last N messages to prevent token explosion on long conversations
+        const trimmedMessages = messages.length > MAX_HISTORY_MESSAGES
+          ? messages.slice(-MAX_HISTORY_MESSAGES)
+          : messages;
+
         // Build conversation: system prompt first, then user/assistant history
         const allMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
           [
             { role: "system", content: SYSTEM_PROMPT },
-            ...messages.map((m) => ({ role: m.role, content: m.content })),
+            ...trimmedMessages.map((m) => ({ role: m.role, content: m.content })),
           ];
 
         let iterations = 0;
@@ -546,10 +567,12 @@ export async function POST(req: NextRequest) {
                   ? `\n\n[SCHEMA WARNING: the following fields were requested but not returned by the API — they likely do not exist for this entity in this environment: ${missingFields.join(", ")}. Do not reference or display these fields.]`
                   : "";
 
+              const rawJson = JSON.stringify(data);
+              const toolContent = truncateToolResult(rawJson, count) + entityNote + schemaWarning;
               allMessages.push({
                 role: "tool",
                 tool_call_id: toolCall.id,
-                content: JSON.stringify(data) + entityNote + schemaWarning,
+                content: toolContent,
               });
             } catch (error) {
               const errorMsg =
