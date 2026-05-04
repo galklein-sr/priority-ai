@@ -4,6 +4,12 @@ import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
 import { buildSchemaReference, ENTITY_ALIASES } from "@/lib/erp-schema";
+import {
+  QueryResult,
+  QueryParams,
+  queryPriorityERP,
+  queryAllPages,
+} from "@/lib/erp-client";
 
 // ─── API Call Logger ────────────────────────────────────────────────────────
 const LOG_FILE = path.join(process.cwd(), "logs", "priority-api-calls.jsonl");
@@ -67,121 +73,20 @@ const client = new AzureOpenAI({
     process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-5.2-chat",
 });
 
-const PRIORITY_BASE_URL =
-  process.env.PRIORITY_BASE_URL ||
-  "https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/otttt";
-
-const PRIORITY_CREDS = Buffer.from(
-  `${process.env.PRIORITY_USERNAME || "6AAE9884207242A0B371BE5C7B5DB639"}:${process.env.PRIORITY_PASSWORD || "PAT"}`
-).toString("base64");
-
-interface QueryResult {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
-  resolvedEntity: string;
-  alternativesTried: string[];
-}
-
-type QueryParams = {
-  entity: string;
-  filter?: string;
-  select?: string;
-  top?: number;
-  skip?: number;
-  orderby?: string;
-  expand?: string;
-  fetchAll?: boolean;
-};
-
-function buildErpUrl(entity: string, params: QueryParams): string {
-  const url = new URL(`${PRIORITY_BASE_URL}/${entity}`);
-  if (params.filter) url.searchParams.set("$filter", params.filter);
-  if (params.select) url.searchParams.set("$select", params.select);
-  url.searchParams.set("$top", String(Math.min(Math.max(params.top ?? 50, 1), 200)));
-  if (params.skip && params.skip > 0) url.searchParams.set("$skip", String(params.skip));
-  if (params.orderby) url.searchParams.set("$orderby", params.orderby);
-  if (params.expand) url.searchParams.set("$expand", params.expand);
-  return url.toString();
-}
-
-const PAGE_SIZE = 200;
-
-async function queryAllPages(
-  params: QueryParams,
-  onStatus: (message: string) => void,
-  onAlternative?: (failedEntity: string, nextEntity: string, errorMsg: string) => void
-): Promise<QueryResult> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allRecords: any[] = [];
-  let skipOffset = 0;
-  let lastResult: QueryResult | null = null;
-
-  while (true) {
-    const pageParams = { ...params, top: PAGE_SIZE, skip: skipOffset, fetchAll: undefined };
-    lastResult = await queryPriorityERP(pageParams, onAlternative);
-    const pageRecords = Array.isArray(lastResult.data?.value) ? lastResult.data.value : [];
-    allRecords.push(...pageRecords);
-    if (pageRecords.length < PAGE_SIZE) break;
-    skipOffset += PAGE_SIZE;
-    onStatus(`${params.entity}: טעינת ${allRecords.length} רשומות...`);
-  }
-
-  return {
-    data: { ...(lastResult?.data ?? {}), value: allRecords },
-    resolvedEntity: lastResult?.resolvedEntity ?? params.entity,
-    alternativesTried: lastResult?.alternativesTried ?? [],
-  };
-}
-
-async function queryPriorityERP(
-  params: QueryParams,
-  onAlternative?: (failedEntity: string, nextEntity: string, errorMsg: string) => void
-): Promise<QueryResult> {
-  // Build candidate list: requested entity first, then any registered aliases.
-  // Key lookup is upper-cased so AI output casing doesn't matter.
-  const aliases = ENTITY_ALIASES[params.entity.toUpperCase()] ?? [];
-  const candidates = [params.entity, ...aliases];
-
-  let lastError: Error = new Error("Unknown error");
-  const tried: string[] = [];
-
-  for (const entityName of candidates) {
-    const res = await fetch(buildErpUrl(entityName, params), {
-      headers: {
-        Authorization: `Basic ${PRIORITY_CREDS}`,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    });
-
-    if (res.ok) {
-      return { data: await res.json(), resolvedEntity: entityName, alternativesTried: tried };
-    }
-
-    const body = await res.text().catch(() => "");
-    const errMsg = `Priority API ${res.status} (${entityName}): ${body.slice(0, 300) || res.statusText}`;
-
-    // 4xx = bad request / auth issue — no point trying aliases
-    if (res.status < 500) throw new Error(errMsg);
-
-    // 5xx = server/entity error — try next alias
-    lastError = new Error(errMsg);
-    tried.push(entityName);
-
-    const nextIdx = candidates.indexOf(entityName) + 1;
-    if (nextIdx < candidates.length) {
-      onAlternative?.(entityName, candidates[nextIdx], errMsg);
-    }
-  }
-
-  throw lastError;
-}
+// ERP query functions (queryPriorityERP, queryAllPages) imported from @/lib/erp-client
 
 const SYSTEM_PROMPT = `אתה עוזר עסקי חכם המחובר למערכת Priority ERP — מערכת תכנון משאבי ארגון מובילה המשמשת חברת הפצת מזון/עופות ישראלית.
 
 **חשוב: ענה תמיד בעברית בלבד.** גם אם המשתמש שואל באנגלית, יש להשיב בעברית.
 
 יש לך גישה בזמן אמת למסד הנתונים של Priority ERP. כאשר משתמשים שואלים שאלות על נתונים עסקיים, השתמש בכלי query_priority_erp לאחזור מידע עדכני.
+
+**QUERY ROUTING — FABRIC vs LIVE ERP:**
+You have two data tools. Choose the right one for each question:
+- **query_fabric_agent** → Use for: aggregations (totals, counts, averages), historical reports, year-over-year trends, rankings (top 10 customers/products/agents by revenue), cross-entity analysis, any query that would need fetchAll on the live ERP. Fabric is a pre-synced copy — much faster for analytics.
+- **query_priority_erp** → Use for: real-time data (open orders right now, today's activity, current stock levels), specific record lookups by ID, data that must be current to the minute.
+- Decision examples: "סה״כ מכירות 2025" → fabric_agent | "הזמנות פתוחות כרגע" → priority_erp | "10 לקוחות מובילים לפי הכנסה" → fabric_agent | "האם הזמנה SO123 פתוחה?" → priority_erp
+- If query_fabric_agent fails or returns a data-quality error, fall back to query_priority_erp and note the fallback to the user.
 
 **COMPANY CONTEXT:**
 - Israeli food distribution company (poultry/processed foods)
@@ -331,6 +236,38 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "query_fabric_agent",
+      description:
+        "Query Microsoft Fabric Data Agent — a pre-synced analytical copy of the Priority ERP data. " +
+        "PREFER this tool for: aggregations (SUM, COUNT, AVG), historical reports, year-over-year comparisons, " +
+        "customer/product/agent rankings by revenue or volume, cross-entity analysis (e.g. orders + customers + agents together), " +
+        "full-dataset queries that would normally require fetchAll. " +
+        "Use query_priority_erp instead for: real-time open orders, today's activity, current stock, specific record lookup by ID, " +
+        "or any data that must be current to the minute. " +
+        "If this tool fails, fall back to query_priority_erp and note the fallback.",
+      parameters: {
+        type: "object",
+        properties: {
+          question: {
+            type: "string",
+            description:
+              "The business question in natural language (Hebrew or English). Be specific and include time periods if relevant. " +
+              "Example: 'מה סה\"כ המכירות לפי סוכן ברבעון הראשון 2026?' or 'Which 10 customers generated the most revenue in 2025?'",
+          },
+          sessionId: {
+            type: "string",
+            description:
+              "Optional session ID for multi-turn Fabric Agent context. Pass the same sessionId across follow-up questions in the same conversation.",
+          },
+        },
+        required: ["question"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 // Maximum characters of JSON to include in a tool result message.
@@ -457,6 +394,42 @@ export async function POST(req: NextRequest) {
 
           // Execute each tool call and append results as tool messages
           for (const toolCall of toolCalls) {
+            // ── Fabric Data Agent tool ─────────────────────────────────────────
+            if (toolCall.function.name === "query_fabric_agent") {
+              const fabricInput = JSON.parse(toolCall.function.arguments) as {
+                question: string;
+                sessionId?: string;
+              };
+              send({ type: "status", message: "Querying Fabric Agent..." });
+              try {
+                const { queryFabricAgent } = await import("@/lib/fabric-client");
+                const agentSessionId = fabricInput.sessionId ?? `s-${Date.now()}`;
+                const result = await queryFabricAgent(fabricInput.question, agentSessionId);
+                const toolContent =
+                  result.answer +
+                  (result.sql
+                    ? `\n\n[SQL generated by Fabric Agent:\n\`\`\`sql\n${result.sql}\n\`\`\`]`
+                    : "") +
+                  `\n\n[NOTE: Data from Microsoft Fabric (pre-synced copy, not real-time).]`;
+                send({ type: "status", message: `Fabric Agent responded` });
+                allMessages.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: toolContent,
+                });
+              } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                send({ type: "status", message: `Fabric Agent failed — falling back to live ERP` });
+                allMessages.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: `Fabric Agent query failed: ${errorMsg}\n\n[FALLBACK: Use query_priority_erp tool to answer this question from the live ERP instead.]`,
+                });
+              }
+              continue;
+            }
+
+            // ── Priority ERP tool ──────────────────────────────────────────────
             const input = JSON.parse(toolCall.function.arguments) as {
               entity: string;
               filter?: string;

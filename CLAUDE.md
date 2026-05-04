@@ -14,126 +14,118 @@ No test runner or linter is configured.
 
 ## Architecture
 
-This is a **Next.js 15 App Router** project with a single-page chat UI that queries a live Priority ERP system via Claude's tool-use agentic loop.
+Next.js 15 App Router — single-page chat UI that queries Priority ERP via an AI agentic loop, with an optional Microsoft Fabric analytical layer.
 
 ### Data flow
 
 ```
 Browser (app/page.tsx)
-  → POST /api/chat  (sends full message history as { role, content }[])
+  → POST /api/chat  (sends trimmed message history as { role, content }[])
   → app/api/chat/route.ts
-      → AzureOpenAI client.chat.completions.create({ stream: true })
-      → Model calls query_priority_erp tool (OpenAI function calling)
-      → route.ts fetches Priority ERP OData API (Basic auth)
-      → tool result fed back as role:"tool" message (up to 8 iterations)
+      → AzureOpenAI streaming (gpt-5.2 via Azure Foundry)
+      → Model calls query_priority_erp OR query_fabric_agent (up to 8 iterations)
+      → query_priority_erp: fetches Priority ERP OData API (Basic auth)
+      → query_fabric_agent: calls Microsoft Fabric Data Agent REST API
       → SSE stream: { type: "token"|"status"|"done"|"error" }
   → Browser parses SSE, updates streaming message state
+
+Browser (sidebar sync button)
+  → POST /api/fabric/sync  (streams NDJSON progress)
+  → app/api/fabric/sync/route.ts
+      → lib/fabric-sync.ts: queryAllPages() → Fabric SQL Warehouse bulk INSERT
 ```
 
 ### Key files
 
-- **`lib/erp-schema.ts`** — Single source of truth for ERP knowledge. Exports `ERP_ENTITIES` (entity/field definitions injected into `SYSTEM_PROMPT` via `buildSchemaReference()`) and `ENTITY_ALIASES` (maps wrong/alternate entity names to correct ones for the fallback retry system). Edit this file to add entities or update field descriptions.
-- **`app/api/chat/route.ts`** — The entire backend. Defines `buildErpUrl`/`queryPriorityERP` (with alias-fallback on 5xx) and `queryAllPages` (automatic multi-page fetch), the `SYSTEM_PROMPT` built from `buildSchemaReference()`, the `query_priority_erp` tool schema (supports `fetchAll`, `skip`), and the SSE streaming POST handler with agentic loop (max 8 iterations). Also contains the API call logger (`appendApiLog`, `extractUserQuestion`).
-- **`app/api/logs/route.ts`** — `GET /api/logs` endpoint for reading the JSONL log. Supports `?entity=ORDERS`, `?status=error`, `?limit=N` query params. Returns entries newest-first plus aggregate stats.
-- **`app/page.tsx`** — Single `"use client"` component. Contains all UI: `WelcomeScreen`, `ChartRenderer` (recharts bar/line/pie), `MarkdownContent` (react-markdown + remark-gfm + chart code block interception), `MessageBubble`, `StatusIndicator`, sidebar with `QUICK_QUERIES`, and the SSE parsing loop. Textarea auto-focuses after each response.
-- **`app/globals.css`** — Imports Syne + JetBrains Mono from Google Fonts, defines the dark industrial theme via CSS variables, markdown table styles (`.markdown-body`), and scan-line animation.
-- **`tailwind.config.ts`** — Custom color palette: `bg` (#06060F), `surface`, `border`, amber/emerald/rose/blue ERP accent colors. Font families: `font-sans` = Syne, `font-mono` = JetBrains Mono.
-- **`next.config.mjs`** — Sets `dns.setDefaultResultOrder("ipv4first")` at module load time. This is critical — IPv6 is broken on the deployment network; without this fix all outbound HTTPS connections (Azure OpenAI + Priority ERP) fail with ECONNRESET.
+- **`lib/erp-schema.ts`** — Single source of truth for ERP knowledge. Exports `ERP_ENTITIES` (entity/field definitions injected into `SYSTEM_PROMPT` via `buildSchemaReference()`) and `ENTITY_ALIASES` (fallback retry map). Edit here to add entities or fields.
+- **`lib/erp-client.ts`** — ERP query layer: `buildErpUrl`, `queryPriorityERP` (with alias-fallback on 5xx), `queryAllPages` (auto-pagination), plus `PRIORITY_BASE_URL`, `PRIORITY_CREDS`, `PAGE_SIZE=200`. Imported by both the chat route and the Fabric sync.
+- **`app/api/chat/route.ts`** — Full backend: `SYSTEM_PROMPT`, two tool schemas (`query_priority_erp` and `query_fabric_agent`), SSE streaming POST handler with agentic loop (max 8 iterations), history trimming (`MAX_HISTORY_MESSAGES=10`), tool result truncation (`MAX_TOOL_RESULT_CHARS=80000`), and API call logger.
+- **`lib/fabric-client.ts`** — Azure AD token cache (60-second pre-expiry refresh), `mssql` connection pool (globalThis-guarded for HMR), `executeSql()`, `queryFabricAgent()` REST call.
+- **`lib/fabric-schema.ts`** — DDL generator. Reads `ERP_ENTITIES` and outputs `CREATE TABLE` SQL for all 12 tables. `ENTITY_PRIMARY_KEYS` maps each entity to its PK column(s). Dates stored as `NVARCHAR(50)` (Priority returns ISO strings with `+02:00` offsets).
+- **`lib/fabric-sync.ts`** — Sync orchestrator: creates tables, fetches all ERP pages via `queryAllPages()`, TRUNCATE + bulk INSERT in batches of 100 rows. Sync state persisted to `data/fabric-sync-state.json`.
+- **`app/api/fabric/sync/route.ts`** — `GET` returns sync state JSON. `POST` triggers sync (body: `{ entity?: string }`), streams NDJSON progress lines.
+- **`app/api/logs/route.ts`** — `GET /api/logs` for reading `logs/priority-api-calls.jsonl`. Supports `?entity=`, `?status=`, `?limit=` params.
+- **`app/page.tsx`** — Single `"use client"` component: `WelcomeScreen`, `ChartRenderer` (recharts), `MarkdownContent` (react-markdown + chart block interception), `MessageBubble`, sidebar with `QUICK_QUERIES` + Fabric Sync section (button, timestamps, progress log).
+- **`next.config.mjs`** — Sets `dns.setDefaultResultOrder("ipv4first")` at module load. **Critical** — IPv6 broken on this network; removing this breaks all outbound HTTPS.
 
 ### Priority ERP API
 
 - **Base URL**: `https://aipriority.priorityweb.cloud/odata/priority/tabula.ini/otttt`
 - **Auth**: HTTP Basic (`PRIORITY_USERNAME:PRIORITY_PASSWORD`)
-- **Protocol**: OData v4 — standard `$filter`, `$select`, `$top`, `$orderby`, `$expand` params
-- **`$top` is capped at 50** per page; use `fetchAll:true` in the tool call to auto-page all records via `queryAllPages()`
-- Key entities: `CUSTOMERS`, `ORDERS`, `LOGPART` (products — **not** `PART`), `AGENTS` (sales reps), `SUPPLIERS`, `PORDERS`, `DOCUMENTS_D`, `INVOICES` (alias: `AINVOICES`), `ACCBAL`
-- Full entity list: `GET /odata/priority/tabula.ini/otttt/` with Basic auth → JSON `{value:[{name,kind,url}]}`
+- **Protocol**: OData v4 — `$filter`, `$select`, `$top`, `$orderby`, `$expand`
+- **`$top` capped at 200** per page; `queryAllPages()` loops with `$skip` until a page returns fewer than 200 records
+- **Accessible entities**: `CUSTOMERS`, `ORDERS`, `LOGPART`, `AGENTS`, `AINVOICES`, `ACCBAL`, `DOCUMENTS_D`, `DOCUMENTS_N`, `PARTBAL`, `WAREHOUSES`, `PRICELIST`, `SERIAL`
+- **NOT accessible** in `otttt`: `SUPPLIERS`, `PORDERS` — do not attempt
 - Data is primarily Hebrew; `CUSTDES`/`PARTDES` = Hebrew name, `ECUSTDES` = English name
-- Open orders: `BOOLCLOSED ne 'Y'`; closed: `BOOLCLOSED eq 'Y'` — **never use null in filters** (causes 500)
-- Active customers/items: `STATDES eq 'פעיל'` — **never** `INACTIVEFLAG eq null`
+- Open orders: `BOOLCLOSED ne 'Y'`; active customers/items: `STATDES eq 'פעיל'`
+- **Never use null in filters** — `X eq null` / `X ne null` causes 500 crashes
 - Order status values (ORDSTATUSDES): `טיוטא` / `אושר מוקדנית` / `מאושר סוכן` / `מאושרת לבצוע` / `בוצעה` / `שולמה` / `מבוטלת`
-- Postman collection reference: https://documenter.getpostman.com/view/30274649/2sB3QRmRt4
+- Timezone: `Asia/Jerusalem` (UTC+2/+3) — date filters must include offset, e.g. `2026-01-01T00:00:00+02:00`
 
-### AI backend — Azure OpenAI (Azure Foundry)
+### AI backend — Azure OpenAI
 
-The app uses **Azure OpenAI** via the `openai` npm package (`AzureOpenAI` client). Tool calling uses OpenAI function-calling format (`type: "function"`). The agentic loop appends results as `role: "tool"` messages (not Anthropic `tool_result` blocks).
+Uses `openai` npm package (`AzureOpenAI` client). Tool calling uses OpenAI function-calling format. Tool results are `role: "tool"` messages (not Anthropic blocks).
 
 - **Endpoint**: `https://giatec-resource.cognitiveservices.azure.com`
-- **Deployment**: configured via `AZURE_OPENAI_DEPLOYMENT` env var (currently `gpt-5.2`)
-- **API version**: `2024-05-01-preview`
-- System prompt is the first message in the array (`role: "system"`)
+- **Deployment**: `AZURE_OPENAI_DEPLOYMENT` env var (currently `gpt-5.2`)
+- Token limit guard: history trimmed to last 10 messages; tool results truncated at 80,000 chars
+
+### Microsoft Fabric integration
+
+An optional analytical layer — a pre-synced copy of ERP data in a Fabric SQL Warehouse, queried via the Fabric Data Agent REST API.
+
+- **Authentication**: Azure AD service principal (`client_credentials` grant)
+  - SQL scope: `https://database.windows.net/.default`
+  - API scope: `https://api.fabric.microsoft.com/.default`
+- **Data Agent endpoint**: `POST https://api.fabric.microsoft.com/v1/workspaces/{WORKSPACE_ID}/dataAgents/{AGENT_ID}/messages`
+- **Sync strategy**: full refresh per entity (TRUNCATE + bulk INSERT in batches of 100)
+- Sync state in `data/fabric-sync-state.json` (gitignored)
+- Model routing: `query_fabric_agent` for aggregations/analytics, `query_priority_erp` for real-time lookups
 
 ### Environment variables (`.env.local`)
 
 ```
 AZURE_OPENAI_ENDPOINT=https://giatec-resource.cognitiveservices.azure.com
 AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT=gpt-5.2          # must match the Azure deployment name exactly
+AZURE_OPENAI_DEPLOYMENT=gpt-5.2          # must match Azure deployment name exactly
 AZURE_OPENAI_API_VERSION=2024-05-01-preview
-PRIORITY_BASE_URL=...        # optional, has hardcoded fallback
-PRIORITY_USERNAME=...        # optional, has hardcoded fallback
-PRIORITY_PASSWORD=...        # optional, has hardcoded fallback
+PRIORITY_BASE_URL=...                    # optional, has hardcoded fallback
+PRIORITY_USERNAME=...                    # optional, has hardcoded fallback
+PRIORITY_PASSWORD=...                    # optional, has hardcoded fallback
+
+# Microsoft Fabric (all required for Fabric features)
+FABRIC_TENANT_ID=
+FABRIC_CLIENT_ID=
+FABRIC_CLIENT_SECRET=
+FABRIC_WORKSPACE_ID=
+FABRIC_SQL_ENDPOINT=        # {workspaceId}.datawarehouse.fabric.microsoft.com
+FABRIC_DATABASE_NAME=
+FABRIC_DATA_AGENT_ID=
 ```
+
+When Fabric env vars are absent, `query_fabric_agent` short-circuits with an error and the model falls back to `query_priority_erp`.
 
 ### SSE protocol (client ↔ route.ts)
 
 | Event type | Payload | Purpose |
 |---|---|---|
 | `token` | `{ text: string }` | Streaming model text delta |
-| `status` | `{ message: string }` | ERP query progress ("Querying ORDERS...") |
+| `status` | `{ message: string }` | Query progress ("Querying ORDERS...", "Fabric Agent responded") |
 | `done` | — | Stream complete |
 | `error` | `{ message: string }` | Error to display |
 
 ### Entity alias / fallback retry
 
-`queryPriorityERP` builds a candidate list `[requestedEntity, ...ENTITY_ALIASES[requestedEntity]]` and tries each in order. A **4xx** is thrown immediately (bad filter/field, not a table name issue). A **5xx** triggers a move to the next alias. The resolved entity name and failed alternatives are included in the log entry and sent to the model as a `[NOTE]` in the tool result.
-
-To register a new alias, add an entry to `ENTITY_ALIASES` in `lib/erp-schema.ts`.
-
-### API call log
-
-Every Priority ERP query is appended as a JSON line to `logs/priority-api-calls.jsonl` (created on first use, gitignored). Each entry records:
-
-```json
-{
-  "timestamp": "2026-03-04T10:45:12.034Z",
-  "userQuestion": "מה הזמנות הפתוחות השבוע?",
-  "entity": "ORDERS",
-  "params": { "filter": "BOOLCLOSED ne 'Y'", "select": "...", "top": 20 },
-  "status": "success",
-  "recordCount": 14,
-  "durationMs": 438,
-  "resolvedEntity": "ORDERS",
-  "alternativesTried": []
-}
-```
-
-View via API while the dev server is running:
-
-```
-GET /api/logs                   # last 200 entries + stats
-GET /api/logs?entity=ORDERS     # filter by entity
-GET /api/logs?status=error      # filter by outcome
-GET /api/logs?limit=50          # change page size
-```
-
-### Paging / full-dataset queries
-
-The `query_priority_erp` tool exposes two pagination mechanisms:
-- `fetchAll: true` — calls `queryAllPages()` which loops with `$skip=0,50,100...` until a page has < 50 records; use for "all orders", totals, full-list requests
-- `skip: N` + `top: M` — manual pagination for the caller
+`queryPriorityERP` (in `lib/erp-client.ts`) builds a candidate list `[requestedEntity, ...ENTITY_ALIASES[entity]]` and tries each in order. **4xx** = thrown immediately (bad filter/field). **5xx** = tries next alias. To add an alias: edit `ENTITY_ALIASES` in `lib/erp-schema.ts`.
 
 ### Chart rendering
 
-The model outputs ` ```chart ` fenced code blocks containing JSON; `ChartRenderer` in `app/page.tsx` renders them with **recharts**.
+Model outputs ` ```chart ` fenced blocks with JSON; `ChartRenderer` renders via recharts.
 
-Supported chart spec:
 ```json
 {"type":"bar","title":"כותרת","labels":["א","ב"],"datasets":[{"label":"סדרה","data":[100,200],"color":"#F59E0B"}]}
 ```
-- `type`: `"bar"` | `"line"` | `"pie"`
-- `datasets[].color` is optional; defaults to theme palette
-- Styled to match the dark industrial theme
+Supported types: `"bar"` | `"line"` | `"pie"`. `color` is optional.
 
 ### Known field name corrections (confirmed against live API)
 
@@ -150,7 +142,7 @@ Supported chart spec:
 
 ### Known issues / quirks
 
-- **IPv6 broken on this network** — `next.config.mjs` applies `dns.setDefaultResultOrder("ipv4first")` globally. Never remove this line; without it all outbound TLS connections (Azure OpenAI + Priority ERP) fail silently with ECONNRESET.
-- The Priority ERP API uses `Asia/Jerusalem` timezone (UTC+2/+3) — date filters must include timezone offset, e.g. `2026-01-01T00:00:00+02:00`.
+- **IPv6 broken on this network** — `dns.setDefaultResultOrder("ipv4first")` in `next.config.mjs` covers all outbound HTTPS (Azure OpenAI, Priority ERP, Fabric API, Azure AD token endpoint). Never remove.
 - The system prompt and UI are fully Hebrew / RTL. `app/layout.tsx` sets `<html lang="he" dir="rtl">`. Sidebar uses `borderLeft` (not `borderRight`) because RTL flex reverses child order.
-- **Priority OData does not support null comparisons** — `X eq null` / `X ne null` in `$filter` causes 500 or 400 errors. Use `STATDES eq 'פעיל'` for active records and `BOOLCLOSED ne 'Y'` for open records.
+- `mssql` connection pool is stored on `globalThis._fabricPoolEntry` to survive Next.js HMR restarts in dev mode without leaking connections.
+- Full sync of all 12 entities may take several minutes — `app/api/fabric/sync/route.ts` exports `maxDuration = 300` for Vercel Pro / self-hosted.

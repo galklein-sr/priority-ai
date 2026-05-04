@@ -10,6 +10,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Image from "next/image";
+import Link from "next/link";
 import {
   BarChart, Bar,
   LineChart, Line,
@@ -527,6 +528,11 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  // Fabric sync state
+  const [syncState, setSyncState] = useState<Record<string, { lastSync: string | null; recordCount: number; status: string }>>({});
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncLog, setSyncLog] = useState<string[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -551,6 +557,53 @@ export default function ChatPage() {
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
+
+  // Load Fabric sync state on mount
+  useEffect(() => {
+    fetch("/api/fabric/sync")
+      .then((r) => r.json())
+      .then(setSyncState)
+      .catch(() => {});
+  }, []);
+
+  const handleSync = useCallback(async (entity?: string) => {
+    setIsSyncing(true);
+    setSyncLog([]);
+    try {
+      const resp = await fetch("/api/fabric/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entity ? { entity } : {}),
+      });
+      if (!resp.body) throw new Error("No response body");
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line) as { type: string; message?: string };
+            if (event.type === "progress" && event.message) {
+              setSyncLog((prev) => [...prev.slice(-49), event.message!]);
+            } else if (event.type === "done") {
+              const updated = await fetch("/api/fabric/sync").then((r) => r.json());
+              setSyncState(updated);
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch (err) {
+      setSyncLog((prev) => [...prev, `שגיאה: ${err instanceof Error ? err.message : String(err)}`]);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   const sendMessage = useCallback(
     async (overrideText?: string) => {
@@ -838,6 +891,27 @@ export default function ChatPage() {
             </div>
           </div>
 
+          {/* Navigation */}
+          <div className="px-3 pt-3 pb-1">
+            <Link
+              href="/distribution"
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all hover:brightness-125"
+              style={{
+                background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.18))",
+                border: "1px solid rgba(59,130,246,0.3)",
+                color: "#60A5FA",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="1" y="3" width="15" height="13" rx="1" />
+                <path d="M16 8h4l3 3v5h-7V8z" />
+                <circle cx="5.5" cy="18.5" r="2.5" />
+                <circle cx="18.5" cy="18.5" r="2.5" />
+              </svg>
+              <span>תכנון הפצה 3D</span>
+            </Link>
+          </div>
+
           {/* Quick queries */}
           <div className="flex-1 overflow-y-auto py-3 px-3 space-y-5">
             {QUICK_QUERIES.map((group) => (
@@ -882,6 +956,55 @@ export default function ChatPage() {
                 </div>
               </div>
             ))}
+            {/* Fabric Sync section */}
+            <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+              <div className="flex items-center gap-1.5 mb-2 px-1">
+                <span style={{ color: "#3B82F6", opacity: 0.7 }}>◈</span>
+                <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: "#50507A" }}>
+                  Fabric Sync
+                </span>
+              </div>
+              <button
+                onClick={() => handleSync()}
+                disabled={isSyncing || isLoading}
+                className="w-full px-2.5 py-2 rounded-lg text-xs transition-all text-right active:scale-95"
+                style={{
+                  background: isSyncing ? "var(--surface-3)" : "rgba(59,130,246,0.1)",
+                  border: "1px solid rgba(59,130,246,0.25)",
+                  color: isSyncing ? "#50507A" : "#60A5FA",
+                  fontFamily: "Syne, sans-serif",
+                }}
+              >
+                {isSyncing ? "⟳ מסנכרן..." : "⟳ סנכרן Fabric"}
+              </button>
+              {/* Last sync timestamps */}
+              <div className="mt-2 space-y-0.5">
+                {Object.entries(syncState).slice(0, 8).map(([entity, info]) => (
+                  <div key={entity} className="flex justify-between items-center px-1">
+                    <span className="font-mono" style={{ color: "#30304A", fontSize: "0.6rem" }}>{entity}</span>
+                    <span className="font-mono" style={{
+                      color: info.status === "success" ? "#10B981" : "#F43F5E",
+                      fontSize: "0.6rem",
+                    }}>
+                      {info.lastSync
+                        ? new Date(info.lastSync).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+                        : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* Sync progress log */}
+              {isSyncing && syncLog.length > 0 && (
+                <div
+                  className="mt-2 p-2 rounded overflow-y-auto"
+                  style={{ background: "#06060F", maxHeight: "100px", border: "1px solid var(--border)" }}
+                >
+                  {syncLog.map((line, i) => (
+                    <div key={i} className="font-mono" style={{ color: "#50507A", fontSize: "0.55rem", lineHeight: 1.5 }}>{line}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer */}
