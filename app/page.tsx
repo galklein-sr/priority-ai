@@ -237,7 +237,7 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
       icon: "◉",
       color: "#3B82F6",
       title: "שפה טבעית",
-      desc: "שאל בעברית פשוטה. קלוד מתרגם את שאלותיך לשאילתות OData מדויקות.",
+      desc: "שאל בעברית פשוטה. המערכת מתרגם את שאלותיך לשאילתות OData מדויקות.",
     },
     {
       icon: "◎",

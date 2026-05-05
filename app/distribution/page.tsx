@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense, useRef, useEffect } from "react";
+import { useState, useCallback, Suspense, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { DistributionOrder } from "@/app/api/distribution/route";
@@ -22,7 +22,7 @@ const MapModal = dynamic(() => import("./MapModal"), { ssr: false });
 interface PalletSlot {
   row: number;   // 0 = back door, 4 = near cab
   col: number;   // 0 = left, 1 = right
-  customers: Array<{ custName: string; cdes: string; packages: number; stopOrder: number }>;
+  customers: Array<{ custName: string; cdes: string; packages: number; stopOrder: number; ordNames: string[] }>;
   totalPackages: number;
 }
 
@@ -46,7 +46,7 @@ interface AllTrucksLoad {
 const MAX_PKG_PER_PALLET = 50;
 const MAX_CUST_PER_PALLET = 3;
 
-type CustomerEntry = { custName: string; cdes: string; packages: number; stopOrder: number };
+type CustomerEntry = { custName: string; cdes: string; packages: number; stopOrder: number; ordNames: string[] };
 
 function packOneTruck(customers: CustomerEntry[]): { pallets: PalletSlot[]; overflow: CustomerEntry[] } {
   const pallets: PalletSlot[] = [];
@@ -92,11 +92,12 @@ function packAllTrucks(orders: DistributionOrder[]): AllTrucksLoad {
   for (const o of orders) {
     const key = `${o.CUSTNAME}__${o.ZANA_DISTRORDER}`;
     const ex = custMap.get(key);
-    if (ex) ex.packages += Math.max(o.ZANA_ORDPLASQUANT, 1);
+    if (ex) { ex.packages += Math.max(o.ZANA_ORDPLASQUANT, 1); ex.ordNames.push(o.ORDNAME); }
     else custMap.set(key, {
       custName: o.CUSTNAME, cdes: o.CDES,
       packages: Math.max(o.ZANA_ORDPLASQUANT, 1),
       stopOrder: o.ZANA_DISTRORDER || 999,
+      ordNames: [o.ORDNAME],
     });
   }
 
@@ -116,6 +117,19 @@ function packAllTrucks(orders: DistributionOrder[]): AllTrucksLoad {
   );
 
   return { trucks, totalPackages, unassigned };
+}
+
+// ─── Order item lines (fetched on pallet click) ───────────────────────────────
+
+interface OrderItemLine {
+  ordName: string;
+  kline: number;
+  partName: string;
+  pdes: string;
+  tquant: number;
+  dquant: number;
+  uomdes: string;
+  tprice: number;
 }
 
 // ─── Color palette for customers ─────────────────────────────────────────────
@@ -492,6 +506,10 @@ export default function DistributionPage() {
   const [showMap, setShowMap] = useState(false);
   const fetchedRef = useRef(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const palletItemsCacheRef = useRef<Set<string>>(new Set());
+  const [palletItemsMap, setPalletItemsMap] = useState<Map<string, OrderItemLine[]>>(new Map());
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [itemsError, setItemsError] = useState("");
 
   const handleDownload = useCallback(() => {
     if (!allTrucks) return;
@@ -511,6 +529,41 @@ export default function DistributionPage() {
   }, []);
 
   useEffect(() => () => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }, []);
+
+  // Clear item cache whenever a fresh set of orders is loaded
+  useEffect(() => {
+    palletItemsCacheRef.current = new Set();
+    setPalletItemsMap(new Map());
+    setItemsError("");
+  }, [orders]);
+
+  // Fetch order line items when a pallet is selected
+  useEffect(() => {
+    if (!selectedPallet) return;
+    const key = `${selectedPallet.row}-${selectedPallet.col}`;
+    if (palletItemsCacheRef.current.has(key)) return;
+    palletItemsCacheRef.current.add(key);
+
+    const ordNames = [...new Set(selectedPallet.customers.flatMap((c) => c.ordNames))];
+    if (ordNames.length === 0) {
+      setPalletItemsMap((prev) => new Map(prev).set(key, []));
+      return;
+    }
+
+    setLoadingItems(true);
+    setItemsError("");
+    fetch(`/api/distribution/items?orders=${encodeURIComponent(ordNames.join(","))}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.error) setItemsError(json.error);
+        setPalletItemsMap((prev) => new Map(prev).set(key, json.lines ?? []));
+      })
+      .catch((err) => {
+        setItemsError(String(err));
+        setPalletItemsMap((prev) => new Map(prev).set(key, []));
+      })
+      .finally(() => setLoadingItems(false));
+  }, [selectedPallet, orders]);
 
   const loadDeliveries = useCallback(async (d: string) => {
     setLoading(true);
@@ -570,6 +623,18 @@ export default function DistributionPage() {
     }));
 
   const totalPallets = currentTruck?.pallets.length ?? 0;
+
+  const selectedKey = selectedPallet ? `${selectedPallet.row}-${selectedPallet.col}` : "";
+  const currentItems = palletItemsMap.get(selectedKey);
+  const itemsByOrd = useMemo(() => {
+    if (!currentItems) return new Map<string, OrderItemLine[]>();
+    const map = new Map<string, OrderItemLine[]>();
+    for (const item of currentItems) {
+      if (!map.has(item.ordName)) map.set(item.ordName, []);
+      map.get(item.ordName)!.push(item);
+    }
+    return map;
+  }, [currentItems]);
 
   return (
     <div
@@ -928,7 +993,7 @@ export default function DistributionPage() {
                   style={{
                     background: "rgba(6,6,16,0.92)",
                     border: `1px solid ${selectedPallet ? "rgba(245,158,11,0.35)" : "var(--border)"}`,
-                    width: selectedPallet ? "220px" : "auto",
+                    width: selectedPallet ? "300px" : "auto",
                     backdropFilter: "blur(8px)",
                   }}
                 >
@@ -950,10 +1015,11 @@ export default function DistributionPage() {
                           style={{ color: "#50507A" }}
                         >×</button>
                       </div>
-                      <div className="p-2 space-y-1.5">
+                      <div className="p-2 space-y-1.5 overflow-y-auto" style={{ maxHeight: "55vh" }}>
                         {selectedPallet.customers.map((c, i) => {
                           const color = colorMap.get(c.custName) ?? "#888";
                           const pct = Math.round((c.packages / selectedPallet.totalPackages) * 100);
+                          const custItems = c.ordNames.flatMap((n) => itemsByOrd.get(n) ?? []);
                           return (
                             <div key={c.custName} className="rounded p-2" style={{ background: `${color}12`, border: `1px solid ${color}30` }}>
                               <div className="flex items-center gap-1.5 mb-1">
@@ -968,9 +1034,30 @@ export default function DistributionPage() {
                                 <span style={{ color: "#10B981" }}>{c.packages} אר'</span>
                                 <span style={{ color: "#F59E0B" }}>עצ' {c.stopOrder}</span>
                               </div>
+                              {custItems.length > 0 && (
+                                <div className="mt-2 space-y-1 pt-1.5" style={{ borderTop: `1px solid ${color}30` }}>
+                                  {custItems.map((item, j) => (
+                                    <div key={j} className="flex items-baseline gap-1.5">
+                                      <span style={{ color: color, fontFamily: "JetBrains Mono, monospace", fontSize: "9px", flexShrink: 0 }}>{item.partName}</span>
+                                      <span className="flex-1 min-w-0 truncate" style={{ color: "#A0A0C0", fontSize: "10px" }}>{item.pdes}</span>
+                                      <span style={{ color: "#10B981", fontSize: "10px", whiteSpace: "nowrap" }}>{item.tquant}{item.uomdes ? ` ${item.uomdes}` : ""}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
+                        {loadingItems && currentItems === undefined && (
+                          <div className="text-center py-1" style={{ color: "#50507A", fontSize: "10px" }}>
+                            טוען פרטי תכולה...
+                          </div>
+                        )}
+                        {itemsError && (
+                          <div className="px-1 py-1 rounded text-xs" style={{ background: "rgba(239,68,68,0.1)", color: "#F87171" }}>
+                            {itemsError}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (

@@ -140,6 +140,24 @@ Supported types: `"bar"` | `"line"` | `"pie"`. `color` is optional.
 | CUSTOMERS | `CITY` | *(does not exist — use `ADDRESS`)* |
 | AGENTS | `AGENTDES` | *(does not exist — `AGENTNAME` is both code and display name)* |
 
+### Distribution planning module (`/distribution`)
+
+A separate page — not part of the chat — for daily delivery planning.
+
+**Pages and API**
+- **`app/distribution/page.tsx`** — Client component: fetches orders, runs packing algorithm, renders 3D truck view + stop list + printable loading sheet. Uses `@react-three/fiber` + `@react-three/drei` (all dynamically imported, SSR disabled).
+- **`app/distribution/MapModal.tsx`** — Full-screen modal with `react-leaflet` (OpenStreetMap tiles). Resolves coordinates: uses `GPSX`/`GPSY` from ERP directly, falls back to Nominatim geocoding (rate-limited to 1 req/sec).
+- **`app/distribution/types.ts`** — Shared `MapStop` type.
+- **`app/api/distribution/route.ts`** — `GET /api/distribution?date=YYYY-MM-DD[&line=CODE]` — queries `ORDERS` by `DUEDATE` (falls back to `CURDATE`). Returns `DistributionOrder[]`.
+- **`app/api/distribution/addresses/route.ts`** — `GET /api/distribution/addresses?customers=A,B,...` — fetches address + GPS coords from `CUSTOMERS` (up to 60 customers per call). Used by `MapModal`.
+- **`lib/trucks-config.ts`** — Static fleet config (4 trucks). Edit to match actual vehicles.
+
+**ERP fields used here**
+- `ORDERS`: `DISTRLINEDES`, `DISTRLINECODE`, `ZANA_DISTRORDER` (stop sequence), `ZANA_ORDPLASQUANT` (package count), `TOTPRICE`
+- `CUSTOMERS`: `GPSX` = longitude (34.xx), `GPSY` = latitude (31–33) — counterintuitive naming; `STATE` = city (not state)
+
+**Packing algorithm** — 10 pallet slots (5 rows × 2 cols), max 50 packages per pallet, max 3 customers per pallet. Highest stop number loaded first → ends up at front of truck (near cab); stop 1 loaded last → accessible at back door. Overflows spill to a second truck.
+
 ### Known issues / quirks
 
 - **IPv6 broken on this network** — `dns.setDefaultResultOrder("ipv4first")` in `next.config.mjs` covers all outbound HTTPS (Azure OpenAI, Priority ERP, Fabric API, Azure AD token endpoint). Never remove.
