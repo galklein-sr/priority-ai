@@ -19,8 +19,8 @@ interface MapModalProps {
 }
 
 const STOP_COLORS = [
-  "#F59E0B", "#3B82F6", "#10B981", "#EF4444", "#8B5CF6",
-  "#F97316", "#06B6D4", "#84CC16", "#EC4899", "#14B8A6",
+  "var(--accent)", "#3B82F6", "var(--success)", "var(--danger)", "#8B5CF6",
+  "#F97316", "var(--cyan)", "#84CC16", "#EC4899", "#14B8A6",
   "#A78BFA", "#FB7185", "#34D399", "#FBBF24", "#60A5FA",
 ];
 
@@ -166,14 +166,14 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.78)", backdropFilter: "blur(4px)" }}
+      style={{ background: "var(--overlay-bg-modal)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         className="w-full max-w-5xl rounded-xl overflow-hidden flex"
         style={{
           height: "85vh",
-          background: "#060610",
+          background: "var(--bg-canvas)",
           border: "1px solid rgba(245,158,11,0.3)",
         }}
       >
@@ -187,8 +187,8 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
             style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}
           >
             <div>
-              <div className="font-bold text-sm" style={{ color: "#E8E8F8" }}>מסלול הפצה</div>
-              <div className="text-xs mt-0.5" style={{ color: "#50507A" }}>
+              <div className="font-bold text-sm" style={{ color: "var(--text-high)" }}>מסלול הפצה</div>
+              <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {stops.length} עצירות
                 {phase !== "addresses" && ` · ${mappedStops.length} מוצגות במפה`}
               </div>
@@ -196,7 +196,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
             <button
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center rounded transition-opacity hover:opacity-70"
-              style={{ color: "#50507A", border: "1px solid var(--border)" }}
+              style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
             >
               ×
             </button>
@@ -205,16 +205,16 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
           {/* Progress bar */}
           {phase !== "done" && (
             <div className="px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
-              <div className="flex justify-between text-xs mb-1" style={{ color: "#50507A" }}>
+              <div className="flex justify-between text-xs mb-1" style={{ color: "var(--text-muted)" }}>
                 <span>{phase === "addresses" ? "טוען כתובות..." : `מקודד (${progress.current}/${progress.total})`}</span>
-                <span style={{ color: "#F59E0B" }}>{Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%</span>
+                <span style={{ color: "var(--accent)" }}>{Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%</span>
               </div>
-              <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--hover-overlay-4)" }}>
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%`,
-                    background: "#F59E0B",
+                    background: "var(--accent)",
                   }}
                 />
               </div>
@@ -230,7 +230,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
                   className="p-2.5 rounded-lg text-xs"
                   style={{
                     background: "var(--surface)",
-                    border: `1px solid ${s.latlng ? color + "44" : "rgba(255,255,255,0.06)"}`,
+                    border: `1px solid ${s.latlng ? color + "44" : "var(--hover-overlay-2)"}`,
                     opacity: s.latlng ? 1 : 0.55,
                   }}
                 >
@@ -241,23 +241,23 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
                     >
                       {s.stopOrder}
                     </div>
-                    <span className="font-medium truncate" style={{ color: "#E8E8F8" }}>
+                    <span className="font-medium truncate" style={{ color: "var(--text-high)" }}>
                       {s.cdes || s.custName}
                     </span>
                   </div>
                   {(s.address || s.city) ? (
-                    <div className="text-xs mb-1 mr-7 leading-relaxed" style={{ color: "#50507A" }}>
+                    <div className="text-xs mb-1 mr-7 leading-relaxed" style={{ color: "var(--text-muted)" }}>
                       {[s.address, s.city].filter(Boolean).join(", ")}
                     </div>
                   ) : null}
                   <div className="flex items-center gap-3 mr-7 flex-wrap">
-                    <span style={{ color: "#10B981" }}>{s.packages} אריזות</span>
-                    <span style={{ color: "#50507A" }}>{s.ordCount} הזמנות</span>
+                    <span style={{ color: "var(--success)" }}>{s.packages} אריזות</span>
+                    <span style={{ color: "var(--text-muted)" }}>{s.ordCount} הזמנות</span>
                     {s.latlng && s.fromGps && (
-                      <span style={{ color: "#06B6D4", fontSize: "10px" }}>📍 GPS</span>
+                      <span style={{ color: "var(--cyan)", fontSize: "10px" }}>📍 GPS</span>
                     )}
                     {!s.latlng && (
-                      <span style={{ color: "#EF4444", fontSize: "10px" }}>לא נמצא</span>
+                      <span style={{ color: "var(--danger)", fontSize: "10px" }}>לא נמצא</span>
                     )}
                   </div>
                 </div>
@@ -271,7 +271,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
                 className="p-2.5 rounded-lg text-xs"
                 style={{
                   background: "var(--surface)",
-                  border: "1px solid rgba(255,255,255,0.04)",
+                  border: "1px solid var(--hover-overlay-soft)",
                   opacity: 0.3,
                 }}
               >
@@ -282,7 +282,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
                   >
                     {s.stopOrder}
                   </div>
-                  <span style={{ color: "#E8E8F8" }}>{s.cdes || s.custName}</span>
+                  <span style={{ color: "var(--text-high)" }}>{s.cdes || s.custName}</span>
                 </div>
               </div>
             ))}
@@ -304,7 +304,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
             {polyline.length > 1 && (
               <Polyline
                 positions={polyline}
-                color="#F59E0B"
+                color="var(--accent)"
                 weight={2.5}
                 opacity={0.75}
                 dashArray="7 5"
@@ -341,7 +341,7 @@ export default function MapModal({ stops, onClose }: MapModalProps) {
           {phase === "addresses" && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none"
-              style={{ background: "rgba(6,6,16,0.7)", color: "#50507A" }}
+              style={{ background: "var(--overlay-bg)", color: "var(--text-muted)" }}
             >
               <div className="text-4xl">🗺</div>
               <div className="text-sm">טוען כתובות מה-ERP...</div>

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { DistributionOrder } from "@/app/api/distribution/route";
 import { getTruckConfig, type TruckConfig } from "@/lib/trucks-config";
+import { ThemeToggleButton } from "@/lib/theme";
 import type { MapStop } from "./types";
 
 // ─── Dynamic imports (SSR-safe) ───────────────────────────────────────────────
@@ -135,9 +136,9 @@ interface OrderItemLine {
 // ─── Color palette for customers ─────────────────────────────────────────────
 
 const COLORS = [
-  "#F59E0B", "#3B82F6", "#10B981", "#EF4444", "#8B5CF6",
-  "#F97316", "#06B6D4", "#84CC16", "#EC4899", "#14B8A6",
-  "#A78BFA", "#FB7185", "#34D399", "#FBBF24", "#60A5FA",
+  "var(--accent)", "var(--blue)", "var(--success)", "#EF4444", "#8B5CF6",
+  "#F97316", "var(--cyan)", "#84CC16", "#EC4899", "#14B8A6",
+  "var(--purple-light)", "#FB7185", "#34D399", "#FBBF24", "var(--blue-light)",
 ];
 
 // ─── Truck geometry constants ─────────────────────────────────────────────────
@@ -258,37 +259,37 @@ function TruckScene({
       {/* Floor */}
       <mesh position={[0, 0, 0]} receiveShadow>
         <boxGeometry args={[TRUCK.floorW, 0.08, TRUCK.floorD]} />
-        <meshStandardMaterial color="#16162A" roughness={0.9} />
+        <meshStandardMaterial color="var(--surface-3b)" roughness={0.9} />
       </mesh>
 
       {/* Left wall (x = -wallX) */}
       <mesh position={[-(TRUCK.wallX + TRUCK.wallThick / 2), midH, 0]}>
         <boxGeometry args={[TRUCK.wallThick, TRUCK.wallH, TRUCK.floorD]} />
-        <meshStandardMaterial color="#111126" opacity={0.75} transparent />
+        <meshStandardMaterial color="var(--truck-wall)" opacity={0.75} transparent />
       </mesh>
 
       {/* Right wall (x = +wallX) */}
       <mesh position={[(TRUCK.wallX + TRUCK.wallThick / 2), midH, 0]}>
         <boxGeometry args={[TRUCK.wallThick, TRUCK.wallH, TRUCK.floorD]} />
-        <meshStandardMaterial color="#111126" opacity={0.75} transparent />
+        <meshStandardMaterial color="var(--truck-wall)" opacity={0.75} transparent />
       </mesh>
 
       {/* Roof */}
       <mesh position={[0, TRUCK.roofY, 0]}>
         <boxGeometry args={[TRUCK.floorW + TRUCK.wallThick * 2, 0.07, TRUCK.floorD]} />
-        <meshStandardMaterial color="#0C0C1E" opacity={0.45} transparent />
+        <meshStandardMaterial color="var(--surface-2b)" opacity={0.45} transparent />
       </mesh>
 
       {/* Back door opening glow (amber) */}
       <mesh position={[0, midH, TRUCK.doorZ - 0.02]}>
         <boxGeometry args={[TRUCK.floorW + TRUCK.wallThick * 2, TRUCK.wallH, 0.06]} />
-        <meshStandardMaterial color="#F59E0B" opacity={0.12} transparent />
+        <meshStandardMaterial color="var(--accent)" opacity={0.12} transparent />
       </mesh>
 
       {/* Front cab wall */}
       <mesh position={[0, midH, TRUCK.frontZ + 0.02]}>
         <boxGeometry args={[TRUCK.floorW + TRUCK.wallThick * 2, TRUCK.wallH, 0.08]} />
-        <meshStandardMaterial color="#0C0C1E" opacity={0.85} transparent />
+        <meshStandardMaterial color="var(--surface-2b)" opacity={0.85} transparent />
       </mesh>
 
       {/* Back door label */}
@@ -296,7 +297,7 @@ function TruckScene({
         <Text
           position={[0, TRUCK.wallH + 0.3, TRUCK.doorZ]}
           fontSize={0.22}
-          color="#F59E0B"
+          color="var(--accent)"
           anchorX="center"
           anchorY="middle"
           font={undefined}
@@ -332,7 +333,7 @@ function TruckScene({
           return (
             <mesh key={key} position={[px, 0.02, pz]}>
               <boxGeometry args={[PALLET.w, 0.04, PALLET.d]} />
-              <meshStandardMaterial color="#1C1C38" opacity={0.6} transparent />
+              <meshStandardMaterial color="var(--pallet-empty)" opacity={0.6} transparent />
             </mesh>
           );
         })
@@ -345,7 +346,7 @@ function TruckScene({
             key={row}
             position={[-(TRUCK.wallX - 0.05), 0.18, PALLET.rowZ(row)]}
             fontSize={0.14}
-            color="#40406A"
+            color="var(--row-label)"
             anchorX="center"
             anchorY="middle"
             font={undefined}
@@ -649,7 +650,7 @@ export default function DistributionPage() {
         <Link
           href="/"
           className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
-          style={{ color: "#50507A" }}
+          style={{ color: "var(--text-muted)" }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
@@ -667,14 +668,14 @@ export default function DistributionPage() {
               border: "1px solid rgba(245,158,11,0.4)",
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
               <rect x="1" y="3" width="15" height="13" rx="1" />
               <path d="M16 8h4l3 3v5h-7V8z" />
               <circle cx="5.5" cy="18.5" r="2.5" />
               <circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
           </div>
-          <span className="font-bold text-base" style={{ color: "#E8E8F8" }}>
+          <span className="font-bold text-base" style={{ color: "var(--text-high)" }}>
             תכנון הפצה
           </span>
         </div>
@@ -683,13 +684,15 @@ export default function DistributionPage() {
 
         {/* Stats */}
         {allTrucks && (
-          <div className="flex items-center gap-4 text-sm" style={{ color: "#50507A" }}>
-            <span><span style={{ color: "#F59E0B" }}>{orders.length}</span> הזמנות</span>
-            <span><span style={{ color: "#10B981" }}>{allTrucks.totalPackages}</span> אריזות</span>
-            <span><span style={{ color: "#3B82F6" }}>{allTrucks.trucks.length}</span> משאיות</span>
-            <span><span style={{ color: "#A78BFA" }}>{totalPallets}</span>/10 משטחים</span>
+          <div className="flex items-center gap-4 text-sm" style={{ color: "var(--text-muted)" }}>
+            <span><span style={{ color: "var(--accent)" }}>{orders.length}</span> הזמנות</span>
+            <span><span style={{ color: "var(--success)" }}>{allTrucks.totalPackages}</span> אריזות</span>
+            <span><span style={{ color: "var(--blue)" }}>{allTrucks.trucks.length}</span> משאיות</span>
+            <span><span style={{ color: "var(--purple-light)" }}>{totalPallets}</span>/10 משטחים</span>
           </div>
         )}
+
+        <ThemeToggleButton style={{ width: "28px", height: "28px", marginRight: "8px" }} />
       </header>
 
       {/* ── Controls bar ── */}
@@ -697,7 +700,7 @@ export default function DistributionPage() {
         className="flex items-center gap-3 px-5 py-3 flex-shrink-0"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <label className="text-sm font-medium" style={{ color: "#A0A0C0" }}>
+        <label className="text-sm font-medium" style={{ color: "var(--text-mid)" }}>
           תאריך אספקה:
         </label>
         <input
@@ -708,7 +711,7 @@ export default function DistributionPage() {
           style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",
-            color: "#E8E8F8",
+            color: "var(--text-high)",
             outline: "none",
             direction: "ltr",
           }}
@@ -720,7 +723,7 @@ export default function DistributionPage() {
           style={{
             background: loading ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.2)",
             border: "1px solid rgba(245,158,11,0.4)",
-            color: "#F59E0B",
+            color: "var(--accent)",
             cursor: loading ? "not-allowed" : "pointer",
           }}
         >
@@ -736,7 +739,7 @@ export default function DistributionPage() {
                   onClick={() => { setSelectedTruck((t) => Math.max(0, t - 1)); setSelectedPallet(null); setTruckInfoVisible(false); }}
                   disabled={selectedTruck === 0}
                   className="px-1.5 py-1 text-sm transition-opacity"
-                  style={{ color: selectedTruck === 0 ? "#30304A" : "#A0A0C0" }}
+                  style={{ color: selectedTruck === 0 ? "var(--border-muted)" : "var(--text-mid)" }}
                 >‹</button>
                 {allTrucks.trucks.map((_, i) => (
                   <button
@@ -753,12 +756,12 @@ export default function DistributionPage() {
                     className="px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1"
                     style={{
                       background: selectedTruck === i ? "rgba(59,130,246,0.2)" : "transparent",
-                      color: selectedTruck === i ? "#60A5FA" : "#50507A",
+                      color: selectedTruck === i ? "var(--blue-light)" : "var(--text-muted)",
                     }}
                   >
                     🚛 {i + 1}
                     {selectedTruck === i && (
-                      <span style={{ color: truckInfoVisible ? "#60A5FA" : "#30304A", fontSize: "10px" }}>ℹ</span>
+                      <span style={{ color: truckInfoVisible ? "var(--blue-light)" : "var(--border-muted)", fontSize: "10px" }}>ℹ</span>
                     )}
                   </button>
                 ))}
@@ -766,7 +769,7 @@ export default function DistributionPage() {
                   onClick={() => { setSelectedTruck((t) => Math.min(allTrucks.trucks.length - 1, t + 1)); setSelectedPallet(null); setTruckInfoVisible(false); }}
                   disabled={selectedTruck === allTrucks.trucks.length - 1}
                   className="px-1.5 py-1 text-sm transition-opacity"
-                  style={{ color: selectedTruck === allTrucks.trucks.length - 1 ? "#30304A" : "#A0A0C0" }}
+                  style={{ color: selectedTruck === allTrucks.trucks.length - 1 ? "var(--border-muted)" : "var(--text-mid)" }}
                 >›</button>
               </div>
             )}
@@ -781,7 +784,7 @@ export default function DistributionPage() {
                   style={{
                     background: activeTab === tab ? "rgba(245,158,11,0.2)" : "transparent",
                     border: `1px solid ${activeTab === tab ? "rgba(245,158,11,0.4)" : "var(--border)"}`,
-                    color: activeTab === tab ? "#F59E0B" : "#50507A",
+                    color: activeTab === tab ? "var(--accent)" : "var(--text-muted)",
                   }}
                 >
                   {tab === "truck" ? "🚛 תצוגת משאית" : "📋 רשימת עצירות"}
@@ -797,7 +800,7 @@ export default function DistributionPage() {
               style={{
                 background: "rgba(16,185,129,0.1)",
                 border: "1px solid rgba(16,185,129,0.3)",
-                color: "#10B981",
+                color: "var(--success)",
                 cursor: "pointer",
               }}
             >
@@ -809,7 +812,7 @@ export default function DistributionPage() {
               style={{
                 background: "rgba(59,130,246,0.1)",
                 border: "1px solid rgba(59,130,246,0.3)",
-                color: "#60A5FA",
+                color: "var(--blue-light)",
                 cursor: "pointer",
               }}
             >
@@ -821,14 +824,14 @@ export default function DistributionPage() {
 
       {/* ── Error ── */}
       {error && (
-        <div className="mx-5 mt-3 px-4 py-2 rounded text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#F87171" }}>
+        <div className="mx-5 mt-3 px-4 py-2 rounded text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "var(--danger-light)" }}>
           {error}
         </div>
       )}
 
       {/* ── Empty state ── */}
       {!loading && fetchedRef.current && orders.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-3" style={{ color: "#50507A" }}>
+        <div className="flex flex-col items-center justify-center flex-1 gap-3" style={{ color: "var(--text-muted)" }}>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
             <rect x="1" y="3" width="15" height="13" rx="1" />
             <path d="M16 8h4l3 3v5h-7V8z" />
@@ -840,7 +843,7 @@ export default function DistributionPage() {
       )}
 
       {!fetchedRef.current && !loading && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-3" style={{ color: "#50507A" }}>
+        <div className="flex flex-col items-center justify-center flex-1 gap-3" style={{ color: "var(--text-muted)" }}>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
             <rect x="1" y="3" width="15" height="13" rx="1" />
             <path d="M16 8h4l3 3v5h-7V8z" />
@@ -862,7 +865,7 @@ export default function DistributionPage() {
               <div className="flex-1 relative" style={{ minHeight: 0 }}>
                 <Canvas
                   camera={{ position: [7, 6, -8], fov: 50 }}
-                  style={{ background: "#060610" }}
+                  style={{ background: "var(--bg-canvas)" }}
                   shadows
                 >
                   <TruckScene
@@ -877,7 +880,7 @@ export default function DistributionPage() {
                 {/* Instructions overlay */}
                 <div
                   className="absolute bottom-3 left-3 text-xs px-3 py-1.5 rounded pointer-events-none"
-                  style={{ background: "rgba(6,6,16,0.8)", color: "#50507A", border: "1px solid var(--border)" }}
+                  style={{ background: "var(--overlay-bg)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
                 >
                   גלגל לזום • גרור לסובב • לחץ על משטח לפרטים
                 </div>
@@ -887,7 +890,7 @@ export default function DistributionPage() {
                   <div
                     className="absolute top-3 left-3 text-xs rounded overflow-hidden"
                     style={{
-                      background: "rgba(6,6,16,0.92)",
+                      background: "var(--overlay-bg)",
                       border: "1px solid rgba(59,130,246,0.35)",
                       width: "230px",
                       backdropFilter: "blur(8px)",
@@ -901,10 +904,10 @@ export default function DistributionPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-base">🚛</span>
                         <div>
-                          <div className="font-semibold" style={{ color: "#60A5FA" }}>
+                          <div className="font-semibold" style={{ color: "var(--blue-light)" }}>
                             משאית {currentTruckConfig.id}
                           </div>
-                          <div style={{ color: "#50507A", fontFamily: "JetBrains Mono, monospace" }}>
+                          <div style={{ color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
                             {currentTruckConfig.licensePlate}
                           </div>
                         </div>
@@ -912,7 +915,7 @@ export default function DistributionPage() {
                       <button
                         onClick={() => setTruckInfoVisible(false)}
                         className="w-5 h-5 flex items-center justify-center rounded transition-opacity hover:opacity-70"
-                        style={{ color: "#50507A" }}
+                        style={{ color: "var(--text-muted)" }}
                       >×</button>
                     </div>
 
@@ -920,43 +923,43 @@ export default function DistributionPage() {
                     <div className="px-3 pt-2.5 pb-1 flex items-center gap-2.5">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-                        style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#60A5FA" }}
+                        style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "var(--blue-light)" }}
                       >
                         {currentTruckConfig.driver.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-medium" style={{ color: "#E8E8F8" }}>{currentTruckConfig.driver}</div>
+                        <div className="font-medium" style={{ color: "var(--text-high)" }}>{currentTruckConfig.driver}</div>
                         {currentTruckConfig.phone && (
-                          <div style={{ color: "#50507A", direction: "ltr" }}>{currentTruckConfig.phone}</div>
+                          <div style={{ color: "var(--text-muted)", direction: "ltr" }}>{currentTruckConfig.phone}</div>
                         )}
                       </div>
                     </div>
 
                     <div className="px-3 pb-2.5 space-y-1.5 mt-1">
                       {/* Type row */}
-                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <span style={{ color: "#50507A" }}>סוג רכב</span>
+                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--hover-overlay-soft)" }}>
+                        <span style={{ color: "var(--text-muted)" }}>סוג רכב</span>
                         <div className="flex items-center gap-1.5">
                           {currentTruckConfig.refrigerated && (
-                            <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "rgba(6,182,212,0.15)", color: "#06B6D4", border: "1px solid rgba(6,182,212,0.25)" }}>
+                            <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "rgba(6,182,212,0.15)", color: "var(--cyan)", border: "1px solid rgba(6,182,212,0.25)" }}>
                               ❄ מקורר
                             </span>
                           )}
-                          <span style={{ color: "#C0C0D8" }}>{currentTruckConfig.type}</span>
+                          <span style={{ color: "var(--text-mid-2)" }}>{currentTruckConfig.type}</span>
                         </div>
                       </div>
 
                       {/* Dimensions */}
-                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <span style={{ color: "#50507A" }}>מידות (מ')</span>
-                        <span style={{ color: "#C0C0D8", fontFamily: "JetBrains Mono, monospace" }}>
+                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--hover-overlay-soft)" }}>
+                        <span style={{ color: "var(--text-muted)" }}>מידות (מ')</span>
+                        <span style={{ color: "var(--text-mid-2)", fontFamily: "JetBrains Mono, monospace" }}>
                           {currentTruckConfig.lengthM} × {currentTruckConfig.widthM} × {currentTruckConfig.heightM}
                         </span>
                       </div>
 
                       {/* Capacity rows */}
-                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <span style={{ color: "#50507A" }}>קיבולת משטחים</span>
+                      <div className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--hover-overlay-soft)" }}>
+                        <span style={{ color: "var(--text-muted)" }}>קיבולת משטחים</span>
                         <div className="flex items-center gap-1.5">
                           <div className="flex gap-0.5">
                             {Array.from({ length: currentTruckConfig.maxPallets }, (_, i) => (
@@ -965,21 +968,21 @@ export default function DistributionPage() {
                                 className="w-2 h-2 rounded-sm"
                                 style={{
                                   background: i < (currentTruck?.pallets.length ?? 0)
-                                    ? "#3B82F6"
-                                    : "rgba(255,255,255,0.07)",
+                                    ? "var(--blue)"
+                                    : "var(--hover-overlay-3)",
                                 }}
                               />
                             ))}
                           </div>
-                          <span style={{ color: "#60A5FA" }}>
+                          <span style={{ color: "var(--blue-light)" }}>
                             {currentTruck?.pallets.length ?? 0}/{currentTruckConfig.maxPallets}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between py-1">
-                        <span style={{ color: "#50507A" }}>משקל מקסימלי</span>
-                        <span style={{ color: "#C0C0D8" }}>
+                        <span style={{ color: "var(--text-muted)" }}>משקל מקסימלי</span>
+                        <span style={{ color: "var(--text-mid-2)" }}>
                           {(currentTruckConfig.maxWeightKg / 1000).toFixed(1)} טון
                         </span>
                       </div>
@@ -991,7 +994,7 @@ export default function DistributionPage() {
                 <div
                   className="absolute top-3 right-3 text-xs rounded overflow-hidden transition-all"
                   style={{
-                    background: "rgba(6,6,16,0.92)",
+                    background: "var(--overlay-bg)",
                     border: `1px solid ${selectedPallet ? "rgba(245,158,11,0.35)" : "var(--border)"}`,
                     width: selectedPallet ? "300px" : "auto",
                     backdropFilter: "blur(8px)",
@@ -1002,17 +1005,17 @@ export default function DistributionPage() {
                     <div>
                       <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: "1px solid rgba(245,158,11,0.2)" }}>
                         <div>
-                          <span className="font-semibold" style={{ color: "#F59E0B" }}>
+                          <span className="font-semibold" style={{ color: "var(--accent)" }}>
                             שורה {selectedPallet.row + 1} · עמודה {selectedPallet.col === 0 ? "שמאל" : "ימין"}
                           </span>
-                          <span className="mr-2" style={{ color: "#50507A" }}>
+                          <span className="mr-2" style={{ color: "var(--text-muted)" }}>
                             ({selectedPallet.totalPackages} אריזות)
                           </span>
                         </div>
                         <button
                           onClick={() => setSelectedPallet(null)}
                           className="w-5 h-5 flex items-center justify-center rounded transition-opacity hover:opacity-70"
-                          style={{ color: "#50507A" }}
+                          style={{ color: "var(--text-muted)" }}
                         >×</button>
                       </div>
                       <div className="p-2 space-y-1.5 overflow-y-auto" style={{ maxHeight: "55vh" }}>
@@ -1024,23 +1027,23 @@ export default function DistributionPage() {
                             <div key={c.custName} className="rounded p-2" style={{ background: `${color}12`, border: `1px solid ${color}30` }}>
                               <div className="flex items-center gap-1.5 mb-1">
                                 <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                                <span className="font-medium truncate" style={{ color: "#E8E8F8" }}>{c.cdes || c.custName}</span>
-                                <span className="mr-auto text-xs" style={{ color: "#50507A" }}>#{i + 1}</span>
+                                <span className="font-medium truncate" style={{ color: "var(--text-high)" }}>{c.cdes || c.custName}</span>
+                                <span className="mr-auto text-xs" style={{ color: "var(--text-muted)" }}>#{i + 1}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--hover-overlay-2)" }}>
                                   <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
                                 </div>
-                                <span style={{ color: "#10B981" }}>{c.packages} אר'</span>
-                                <span style={{ color: "#F59E0B" }}>עצ' {c.stopOrder}</span>
+                                <span style={{ color: "var(--success)" }}>{c.packages} אר'</span>
+                                <span style={{ color: "var(--accent)" }}>עצ' {c.stopOrder}</span>
                               </div>
                               {custItems.length > 0 && (
                                 <div className="mt-2 space-y-1 pt-1.5" style={{ borderTop: `1px solid ${color}30` }}>
                                   {custItems.map((item, j) => (
                                     <div key={j} className="flex items-baseline gap-1.5">
                                       <span style={{ color: color, fontFamily: "JetBrains Mono, monospace", fontSize: "9px", flexShrink: 0 }}>{item.partName}</span>
-                                      <span className="flex-1 min-w-0 truncate" style={{ color: "#A0A0C0", fontSize: "10px" }}>{item.pdes}</span>
-                                      <span style={{ color: "#10B981", fontSize: "10px", whiteSpace: "nowrap" }}>{item.tquant}{item.uomdes ? ` ${item.uomdes}` : ""}</span>
+                                      <span className="flex-1 min-w-0 truncate" style={{ color: "var(--text-mid)", fontSize: "10px" }}>{item.pdes}</span>
+                                      <span style={{ color: "var(--success)", fontSize: "10px", whiteSpace: "nowrap" }}>{item.tquant}{item.uomdes ? ` ${item.uomdes}` : ""}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1049,12 +1052,12 @@ export default function DistributionPage() {
                           );
                         })}
                         {loadingItems && currentItems === undefined && (
-                          <div className="text-center py-1" style={{ color: "#50507A", fontSize: "10px" }}>
+                          <div className="text-center py-1" style={{ color: "var(--text-muted)", fontSize: "10px" }}>
                             טוען פרטי תכולה...
                           </div>
                         )}
                         {itemsError && (
-                          <div className="px-1 py-1 rounded text-xs" style={{ background: "rgba(239,68,68,0.1)", color: "#F87171" }}>
+                          <div className="px-1 py-1 rounded text-xs" style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger-light)" }}>
                             {itemsError}
                           </div>
                         )}
@@ -1063,14 +1066,14 @@ export default function DistributionPage() {
                   ) : (
                     /* ── Loading order legend ── */
                     <div className="px-3 py-2">
-                      <div className="font-semibold mb-1.5" style={{ color: "#A0A0C0" }}>סדר העמסה</div>
+                      <div className="font-semibold mb-1.5" style={{ color: "var(--text-mid)" }}>סדר העמסה</div>
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-1 rounded" style={{ background: "#F59E0B" }} />
-                        <span style={{ color: "#50507A" }}>פתח אחורי ← עצירה 1</span>
+                        <div className="w-3 h-1 rounded" style={{ background: "var(--accent)" }} />
+                        <span style={{ color: "var(--text-muted)" }}>פתח אחורי ← עצירה 1</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-1 rounded" style={{ background: "#3B82F6" }} />
-                        <span style={{ color: "#50507A" }}>עצירה אחרונה → קדמת משאית</span>
+                        <div className="w-3 h-1 rounded" style={{ background: "var(--blue)" }} />
+                        <span style={{ color: "var(--text-muted)" }}>עצירה אחרונה → קדמת משאית</span>
                       </div>
                     </div>
                   )}
@@ -1083,20 +1086,20 @@ export default function DistributionPage() {
                     style={{
                       left: hoverPos.x + 14,
                       top: hoverPos.y - 10,
-                      background: "rgba(6,6,16,0.95)",
+                      background: "var(--overlay-bg-strong)",
                       border: "1px solid rgba(245,158,11,0.3)",
                       backdropFilter: "blur(6px)",
                       maxWidth: "200px",
                     }}
                   >
-                    <div className="font-semibold mb-1" style={{ color: "#F59E0B" }}>
+                    <div className="font-semibold mb-1" style={{ color: "var(--accent)" }}>
                       שורה {hoveredPallet.row + 1} · {hoveredPallet.totalPackages} אריזות
                     </div>
                     {hoveredPallet.customers.map((c) => (
                       <div key={c.custName} className="flex items-center gap-1.5 mt-0.5">
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorMap.get(c.custName) ?? "#888" }} />
-                        <span className="truncate" style={{ color: "#C0C0D8" }}>{c.cdes || c.custName}</span>
-                        <span className="mr-auto" style={{ color: "#10B981" }}>{c.packages}</span>
+                        <span className="truncate" style={{ color: "var(--text-mid-2)" }}>{c.cdes || c.custName}</span>
+                        <span className="mr-auto" style={{ color: "var(--success)" }}>{c.packages}</span>
                       </div>
                     ))}
                   </div>
@@ -1106,7 +1109,7 @@ export default function DistributionPage() {
                 {allTrucks && allTrucks.trucks.length > 1 && (
                   <div
                     className="absolute bottom-3 right-3 text-xs px-3 py-1.5 rounded pointer-events-none"
-                    style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.25)", color: "#60A5FA" }}
+                    style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.25)", color: "var(--blue-light)" }}
                   >
                     משאית {selectedTruck + 1} מתוך {allTrucks.trucks.length} · {currentTruck?.pallets.length ?? 0}/10 משטחים
                   </div>
@@ -1139,14 +1142,14 @@ export default function DistributionPage() {
                           {stop || "?"}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm" style={{ color: "#E8E8F8" }}>
+                          <div className="font-semibold text-sm" style={{ color: "var(--text-high)" }}>
                             {stopOrders[0]?.CDES || custName}
                           </div>
-                          {line && <div className="text-xs mt-0.5" style={{ color: "#50507A" }}>קו: {line}</div>}
+                          {line && <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>קו: {line}</div>}
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-medium" style={{ color: "#10B981" }}>{totalPkg} אריזות</div>
-                          <div className="text-xs" style={{ color: "#50507A" }}>{stopOrders.length} הזמנות</div>
+                          <div className="text-sm font-medium" style={{ color: "var(--success)" }}>{totalPkg} אריזות</div>
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>{stopOrders.length} הזמנות</div>
                         </div>
                       </div>
 
@@ -1155,12 +1158,12 @@ export default function DistributionPage() {
                           <div
                             key={o.ORDNAME}
                             className="flex items-center gap-3 px-3 py-1.5 rounded text-xs"
-                            style={{ background: "rgba(255,255,255,0.025)" }}
+                            style={{ background: "var(--hover-overlay)" }}
                           >
-                            <span style={{ color: "#F59E0B", fontFamily: "JetBrains Mono, monospace" }}>{o.ORDNAME}</span>
-                            <span className="flex-1" style={{ color: "#A0A0C0" }}>{o.CDES}</span>
-                            <span style={{ color: "#10B981" }}>{o.ZANA_ORDPLASQUANT} אר'</span>
-                            <span style={{ color: "#50507A" }}>₪{o.TOTPRICE?.toLocaleString()}</span>
+                            <span style={{ color: "var(--accent)", fontFamily: "JetBrains Mono, monospace" }}>{o.ORDNAME}</span>
+                            <span className="flex-1" style={{ color: "var(--text-mid)" }}>{o.CDES}</span>
+                            <span style={{ color: "var(--success)" }}>{o.ZANA_ORDPLASQUANT} אר'</span>
+                            <span style={{ color: "var(--text-muted)" }}>₪{o.TOTPRICE?.toLocaleString()}</span>
                           </div>
                         ))}
                       </div>

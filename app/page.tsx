@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Image from "next/image";
 import Link from "next/link";
+import { ThemeToggleButton } from "@/lib/theme";
 import {
   BarChart, Bar,
   LineChart, Line,
@@ -105,7 +106,7 @@ const QUICK_QUERIES = [
 
 // ─── Chart Renderer ──────────────────────────────────────────────────────────
 
-const CHART_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#A78BFA", "#F43F5E", "#FB923C", "#34D399", "#60A5FA"];
+const CHART_COLORS = ["var(--accent)", "var(--blue)", "var(--success)", "var(--purple-light)", "var(--error)", "var(--orange-light)", "var(--success-light)", "var(--blue-light)"];
 
 type ChartDataset = { label: string; data: number[]; color?: string };
 type ChartSpec = {
@@ -131,18 +132,18 @@ function ChartRenderer({ raw }: { raw: string }) {
   });
 
   const tooltipStyle = {
-    backgroundColor: "#0E0E1E",
+    backgroundColor: "var(--pallet-empty-2)",
     border: "1px solid #252540",
     borderRadius: "8px",
-    color: "#C4C4DC",
+    color: "var(--text)",
     fontFamily: "JetBrains Mono, monospace",
     fontSize: "0.75rem",
   };
 
   return (
-    <div className="my-4 p-4 rounded-xl" style={{ background: "#0B0B18", border: "1px solid #1C1C35" }}>
+    <div className="my-4 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid #1C1C35" }}>
       {spec.title && (
-        <div className="text-sm font-semibold mb-3 text-right" style={{ color: "#C4C4DC", fontFamily: "Syne, sans-serif" }}>
+        <div className="text-sm font-semibold mb-3 text-right" style={{ color: "var(--text)", fontFamily: "Syne, sans-serif" }}>
           {spec.title}
         </div>
       )}
@@ -157,22 +158,22 @@ function ChartRenderer({ raw }: { raw: string }) {
           </PieChart>
         ) : spec.type === "line" ? (
           <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1C1C35" />
-            <XAxis dataKey="label" tick={{ fill: "#50507A", fontSize: 11 }} />
-            <YAxis tick={{ fill: "#50507A", fontSize: 11 }} width={60} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="label" tick={{ fill: "var(--text-muted)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-muted)", fontSize: 11 }} width={60} />
             <Tooltip contentStyle={tooltipStyle} />
-            <Legend wrapperStyle={{ color: "#8888A8", fontSize: "0.75rem" }} />
+            <Legend wrapperStyle={{ color: "var(--text-low)", fontSize: "0.75rem" }} />
             {spec.datasets.map((ds, i) => (
               <Line key={ds.label} type="monotone" dataKey={ds.label} stroke={ds.color ?? CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
             ))}
           </LineChart>
         ) : (
           <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1C1C35" />
-            <XAxis dataKey="label" tick={{ fill: "#50507A", fontSize: 11 }} />
-            <YAxis tick={{ fill: "#50507A", fontSize: 11 }} width={70} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="label" tick={{ fill: "var(--text-muted)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-muted)", fontSize: 11 }} width={70} />
             <Tooltip contentStyle={tooltipStyle} />
-            <Legend wrapperStyle={{ color: "#8888A8", fontSize: "0.75rem" }} />
+            <Legend wrapperStyle={{ color: "var(--text-low)", fontSize: "0.75rem" }} />
             {spec.datasets.map((ds, i) => (
               <Bar key={ds.label} dataKey={ds.label} fill={ds.color ?? CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} />
             ))}
@@ -229,25 +230,25 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
   const capabilities = [
     {
       icon: "◈",
-      color: "#F59E0B",
+      color: "var(--accent)",
       title: "נתוני ERP בזמן אמת",
       desc: "שאילתות בזמן אמת על ישויות Priority ERP — לקוחות, הזמנות, מוצרים ועוד.",
     },
     {
       icon: "◉",
-      color: "#3B82F6",
+      color: "var(--blue)",
       title: "שפה טבעית",
       desc: "שאל בעברית פשוטה. המערכת מתרגם את שאלותיך לשאילתות OData מדויקות.",
     },
     {
       icon: "◎",
-      color: "#10B981",
+      color: "var(--success)",
       title: "ניתוח נתונים",
       desc: "סיכומים, סכומים ותובנות — לא רק הצגת נתונים גולמיים.",
     },
     {
       icon: "◈",
-      color: "#A78BFA",
+      color: "var(--purple-light)",
       title: "שאילתות מרובות שלבים",
       desc: "שאלות מורכבות הדורשות שילוב מספר ישויות מטופלות אוטומטית.",
     },
@@ -278,14 +279,14 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
         >
           <span
             className="text-xl md:text-2xl font-black"
-            style={{ color: "#F59E0B", fontFamily: "Syne, sans-serif" }}
+            style={{ color: "var(--accent)", fontFamily: "Syne, sans-serif" }}
           >
             P
           </span>
         </div>
         <div
           className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center"
-          style={{ background: "#10B981" }}
+          style={{ background: "var(--success)" }}
         >
           <div className="w-2 h-2 rounded-full bg-white" />
         </div>
@@ -293,11 +294,11 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
 
       <h1
         className="text-xl md:text-2xl font-bold mb-2 tracking-tight"
-        style={{ color: "#E8E8F8", fontFamily: "Syne, sans-serif" }}
+        style={{ color: "var(--text-high)", fontFamily: "Syne, sans-serif" }}
       >
         עוזר Priority ERP
       </h1>
-      <p className="text-sm mb-8 md:mb-10" style={{ color: "#50507A" }}>
+      <p className="text-sm mb-8 md:mb-10" style={{ color: "var(--text-muted)" }}>
         מופעל על ידי ChatGPT 5.2 · סביבת otttt
       </p>
 
@@ -308,17 +309,17 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
             key={cap.title}
             className="p-4 rounded-xl"
             style={{
-              background: "#0B0B18",
+              background: "var(--surface)",
               border: "1px solid #1C1C35",
             }}
           >
             <div className="text-lg mb-2 font-mono" style={{ color: cap.color }}>
               {cap.icon}
             </div>
-            <div className="text-sm font-semibold mb-1" style={{ color: "#C4C4DC" }}>
+            <div className="text-sm font-semibold mb-1" style={{ color: "var(--text)" }}>
               {cap.title}
             </div>
-            <div className="text-xs leading-relaxed" style={{ color: "#50507A" }}>
+            <div className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
               {cap.desc}
             </div>
           </div>
@@ -338,9 +339,9 @@ function WelcomeScreen({ onQuery }: { onQuery: (q: string) => void }) {
             onClick={() => onQuery(q)}
             className="px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105 active:scale-95"
             style={{
-              background: "#10101F",
+              background: "var(--surface-2)",
               border: "1px solid #1C1C35",
-              color: "#C4C4DC",
+              color: "var(--text)",
               fontFamily: "Syne, sans-serif",
             }}
           >
@@ -383,7 +384,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed"
             style={{
               background: "linear-gradient(135deg, #D97706, #F59E0B)",
-              color: "#0A0A0A",
+              color: "var(--surface-2)",
               fontWeight: 500,
             }}
           >
@@ -391,7 +392,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           </div>
           <div
             className="text-xs mt-1 text-right pr-1"
-            style={{ color: "#50507A", fontFamily: "JetBrains Mono, monospace" }}
+            style={{ color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}
           >
             {timeStr}
           </div>
@@ -408,11 +409,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {/* Assistant icon */}
           <div
             className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-            style={{ background: "#1C1C35", border: "1px solid #252540" }}
+            style={{ background: "var(--border)", border: "1px solid #252540" }}
           >
             <span
               className="text-xs font-black"
-              style={{ color: "#F59E0B", fontFamily: "JetBrains Mono, monospace" }}
+              style={{ color: "var(--accent)", fontFamily: "JetBrains Mono, monospace" }}
             >
               P
             </span>
@@ -427,7 +428,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                 style={{
                   background: "rgba(59, 130, 246, 0.12)",
                   border: "1px solid rgba(59, 130, 246, 0.25)",
-                  color: "#60A5FA",
+                  color: "var(--blue-light)",
                   fontFamily: "JetBrains Mono, monospace",
                   fontSize: "0.65rem",
                   letterSpacing: "0.05em",
@@ -441,7 +442,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <span
             className="text-xs mr-auto"
             style={{
-              color: "#50507A",
+              color: "var(--text-muted)",
               fontFamily: "JetBrains Mono, monospace",
               fontSize: "0.7rem",
             }}
@@ -454,7 +455,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         <div
           className="px-4 md:px-5 py-4 rounded-2xl rounded-tr-sm"
           style={{
-            background: "#0E0E1E",
+            background: "var(--pallet-empty-2)",
             border: "1px solid #1C1C35",
             borderRight: "2px solid #F59E0B33",
           }}
@@ -462,14 +463,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {message.content ? (
             <MarkdownContent content={message.content} />
           ) : (
-            <span className="cursor text-sm" style={{ color: "#50507A" }}>
+            <span className="cursor text-sm" style={{ color: "var(--text-muted)" }}>
               &nbsp;
             </span>
           )}
           {message.isStreaming && message.content && (
             <span
               className="inline-block w-0.5 h-3.5 mr-0.5 align-middle animate-blink"
-              style={{ background: "#F59E0B" }}
+              style={{ background: "var(--accent)" }}
             />
           )}
         </div>
@@ -486,7 +487,7 @@ function StatusIndicator({ status }: { status: string }) {
       <div
         className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl max-w-[90%]"
         style={{
-          background: "#0B0B18",
+          background: "var(--surface)",
           border: "1px solid #1C1C35",
           borderRight: "2px solid #F59E0B44",
         }}
@@ -494,7 +495,7 @@ function StatusIndicator({ status }: { status: string }) {
         <span
           className="text-xs truncate"
           style={{
-            color: "#A8A8C8",
+            color: "var(--text-mid-3)",
             fontFamily: "JetBrains Mono, monospace",
           }}
         >
@@ -507,7 +508,7 @@ function StatusIndicator({ status }: { status: string }) {
               key={i}
               className="w-1.5 h-1.5 rounded-full"
               style={{
-                background: "#F59E0B",
+                background: "var(--accent)",
                 animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
               }}
             />
@@ -794,7 +795,7 @@ export default function ChatPage() {
                 <button
                   onClick={() => setSidebarOpen(false)}
                   className="w-7 h-7 rounded flex items-center justify-center"
-                  style={{ color: "#50507A" }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18"/>
@@ -836,7 +837,7 @@ export default function ChatPage() {
                 <span
                   className="text-sm font-black"
                   style={{
-                    color: "#F59E0B",
+                    color: "var(--accent)",
                     fontFamily: "JetBrains Mono, monospace",
                   }}
                 >
@@ -846,19 +847,22 @@ export default function ChatPage() {
               <div>
                 <div
                   className="text-sm font-bold leading-none"
-                  style={{ color: "#E8E8F8" }}
+                  style={{ color: "var(--text-high)" }}
                 >
                   Priority ERP
                 </div>
                 <div
                   className="text-xs mt-0.5"
                   style={{
-                    color: "#50507A",
+                    color: "var(--text-muted)",
                     fontFamily: "JetBrains Mono, monospace",
                   }}
                 >
                   otttt
                 </div>
+              </div>
+              <div className="mr-auto">
+                <ThemeToggleButton style={{ width: "28px", height: "28px" }} />
               </div>
             </div>
 
@@ -869,7 +873,7 @@ export default function ChatPage() {
             >
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: "#10B981" }}
+                style={{ background: "var(--success)" }}
               >
                 <div
                   className="w-2 h-2 rounded-full animate-pulse-slow"
@@ -879,13 +883,13 @@ export default function ChatPage() {
               <span
                 className="text-xs"
                 style={{
-                  color: "#10B981",
+                  color: "var(--success)",
                   fontFamily: "JetBrains Mono, monospace",
                 }}
               >
                 מחובר
               </span>
-              <span className="text-xs mr-auto" style={{ color: "#50507A" }}>
+              <span className="text-xs mr-auto" style={{ color: "var(--text-muted)" }}>
                 OData v4
               </span>
             </div>
@@ -899,7 +903,7 @@ export default function ChatPage() {
               style={{
                 background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.18))",
                 border: "1px solid rgba(59,130,246,0.3)",
-                color: "#60A5FA",
+                color: "var(--blue-light)",
               }}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -917,12 +921,12 @@ export default function ChatPage() {
             {QUICK_QUERIES.map((group) => (
               <div key={group.category}>
                 <div className="flex items-center gap-1.5 mb-2 px-1">
-                  <span style={{ color: "#F59E0B", opacity: 0.7 }}>
+                  <span style={{ color: "var(--accent)", opacity: 0.7 }}>
                     {group.icon}
                   </span>
                   <span
                     className="text-xs font-semibold tracking-widest uppercase"
-                    style={{ color: "#50507A" }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     {group.category}
                   </span>
@@ -935,19 +939,19 @@ export default function ChatPage() {
                       disabled={isLoading}
                       className="w-full text-right px-2.5 py-2 rounded-lg text-xs transition-all duration-150 hover:-translate-x-0.5 active:scale-95"
                       style={{
-                        color: "#8888A8",
+                        color: "var(--text-low)",
                         fontFamily: "Syne, sans-serif",
                         lineHeight: 1.4,
                       }}
                       onMouseEnter={(e) => {
                         (e.target as HTMLElement).style.background =
                           "var(--surface-3)";
-                        (e.target as HTMLElement).style.color = "#C4C4DC";
+                        (e.target as HTMLElement).style.color = "var(--text)";
                       }}
                       onMouseLeave={(e) => {
                         (e.target as HTMLElement).style.background =
                           "transparent";
-                        (e.target as HTMLElement).style.color = "#8888A8";
+                        (e.target as HTMLElement).style.color = "var(--text-low)";
                       }}
                     >
                       {q}
@@ -959,8 +963,8 @@ export default function ChatPage() {
             {/* Fabric Sync section */}
             <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
               <div className="flex items-center gap-1.5 mb-2 px-1">
-                <span style={{ color: "#3B82F6", opacity: 0.7 }}>◈</span>
-                <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: "#50507A" }}>
+                <span style={{ color: "var(--blue)", opacity: 0.7 }}>◈</span>
+                <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: "var(--text-muted)" }}>
                   Fabric Sync
                 </span>
               </div>
@@ -971,7 +975,7 @@ export default function ChatPage() {
                 style={{
                   background: isSyncing ? "var(--surface-3)" : "rgba(59,130,246,0.1)",
                   border: "1px solid rgba(59,130,246,0.25)",
-                  color: isSyncing ? "#50507A" : "#60A5FA",
+                  color: isSyncing ? "var(--text-muted)" : "var(--blue-light)",
                   fontFamily: "Syne, sans-serif",
                 }}
               >
@@ -981,9 +985,9 @@ export default function ChatPage() {
               <div className="mt-2 space-y-0.5">
                 {Object.entries(syncState).slice(0, 8).map(([entity, info]) => (
                   <div key={entity} className="flex justify-between items-center px-1">
-                    <span className="font-mono" style={{ color: "#30304A", fontSize: "0.6rem" }}>{entity}</span>
+                    <span className="font-mono" style={{ color: "var(--border-muted)", fontSize: "0.6rem" }}>{entity}</span>
                     <span className="font-mono" style={{
-                      color: info.status === "success" ? "#10B981" : "#F43F5E",
+                      color: info.status === "success" ? "var(--success)" : "var(--error)",
                       fontSize: "0.6rem",
                     }}>
                       {info.lastSync
@@ -997,10 +1001,10 @@ export default function ChatPage() {
               {isSyncing && syncLog.length > 0 && (
                 <div
                   className="mt-2 p-2 rounded overflow-y-auto"
-                  style={{ background: "#06060F", maxHeight: "100px", border: "1px solid var(--border)" }}
+                  style={{ background: "var(--bg)", maxHeight: "100px", border: "1px solid var(--border)" }}
                 >
                   {syncLog.map((line, i) => (
-                    <div key={i} className="font-mono" style={{ color: "#50507A", fontSize: "0.55rem", lineHeight: 1.5 }}>{line}</div>
+                    <div key={i} className="font-mono" style={{ color: "var(--text-muted)", fontSize: "0.55rem", lineHeight: 1.5 }}>{line}</div>
                   ))}
                 </div>
               )}
@@ -1015,14 +1019,14 @@ export default function ChatPage() {
             <button
               onClick={handleClearChat}
               className="w-full px-3 py-2 rounded-lg text-xs transition-all text-right active:scale-95"
-              style={{ color: "#50507A" }}
+              style={{ color: "var(--text-muted)" }}
               onMouseEnter={(e) => {
                 (e.target as HTMLElement).style.background = "var(--surface-2)";
-                (e.target as HTMLElement).style.color = "#C4C4DC";
+                (e.target as HTMLElement).style.color = "var(--text)";
               }}
               onMouseLeave={(e) => {
                 (e.target as HTMLElement).style.background = "transparent";
-                (e.target as HTMLElement).style.color = "#50507A";
+                (e.target as HTMLElement).style.color = "var(--text-muted)";
               }}
             >
               ↺ נקה שיחה
@@ -1046,16 +1050,16 @@ export default function ChatPage() {
             <button
               onClick={() => setSidebarOpen((v) => !v)}
               className="w-7 h-7 rounded flex items-center justify-center transition-all flex-shrink-0"
-              style={{ color: "#50507A" }}
+              style={{ color: "var(--text-muted)" }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.background =
                   "var(--surface-2)";
-                (e.currentTarget as HTMLElement).style.color = "#C4C4DC";
+                (e.currentTarget as HTMLElement).style.color = "var(--text)";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.background =
                   "transparent";
-                (e.currentTarget as HTMLElement).style.color = "#50507A";
+                (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
               }}
             >
               <svg
@@ -1079,7 +1083,7 @@ export default function ChatPage() {
 
             <span
               className="text-sm font-semibold truncate"
-              style={{ color: "#C4C4DC" }}
+              style={{ color: "var(--text)" }}
             >
               עוזר חכם
             </span>
@@ -1089,7 +1093,7 @@ export default function ChatPage() {
                 className="px-2 py-0.5 rounded-full text-xs flex-shrink-0"
                 style={{
                   background: "var(--surface-2)",
-                  color: "#50507A",
+                  color: "var(--text-muted)",
                   fontFamily: "JetBrains Mono, monospace",
                 }}
               >
@@ -1117,12 +1121,12 @@ export default function ChatPage() {
               <div className="flex items-center gap-1.5">
                 <div
                   className="w-1.5 h-1.5 rounded-full status-flash flex-shrink-0"
-                  style={{ background: "#F59E0B" }}
+                  style={{ background: "var(--accent)" }}
                 />
                 <span
                   className="text-xs"
                   style={{
-                    color: "#F59E0B",
+                    color: "var(--accent)",
                     fontFamily: "JetBrains Mono, monospace",
                   }}
                 >
@@ -1133,7 +1137,7 @@ export default function ChatPage() {
             {/* Model badge — hidden on mobile */}
             <span
               className="hidden md:inline text-xs"
-              style={{ color: "#30304A", fontFamily: "JetBrains Mono, monospace" }}
+              style={{ color: "var(--border-muted)", fontFamily: "JetBrains Mono, monospace" }}
             >
               ChatGPT 5.2
             </span>
@@ -1206,7 +1210,7 @@ export default function ChatPage() {
                     !isLoading && input.trim()
                       ? "linear-gradient(135deg, #D97706, #F59E0B)"
                       : "var(--surface-3)",
-                  color: !isLoading && input.trim() ? "#0A0A0A" : "#30304A",
+                  color: !isLoading && input.trim() ? "var(--surface-2)" : "var(--border-muted)",
                   cursor:
                     !isLoading && input.trim() ? "pointer" : "not-allowed",
                 }}
@@ -1249,8 +1253,8 @@ export default function ChatPage() {
                 dir="rtl"
                 className="flex-1 resize-none bg-transparent text-sm outline-none leading-relaxed text-right"
                 style={{
-                  color: "#C4C4DC",
-                  caretColor: "#F59E0B",
+                  color: "var(--text)",
+                  caretColor: "var(--accent)",
                   maxHeight: "120px",
                   fontFamily: "Syne, system-ui, sans-serif",
                 }}
@@ -1260,7 +1264,7 @@ export default function ChatPage() {
               <div
                 className="flex-shrink-0 pb-1"
                 style={{
-                  color: "#F59E0B",
+                  color: "var(--accent)",
                   fontFamily: "JetBrains Mono, monospace",
                   fontSize: "0.875rem",
                   opacity: 0.6,
@@ -1276,7 +1280,7 @@ export default function ChatPage() {
               <span
                 className="text-xs"
                 style={{
-                  color: "#30304A",
+                  color: "var(--border-muted)",
                   fontFamily: "JetBrains Mono, monospace",
                 }}
               >
@@ -1286,7 +1290,7 @@ export default function ChatPage() {
                 <span
                   className="text-xs"
                   style={{
-                    color: "#30304A",
+                    color: "var(--border-muted)",
                     fontFamily: "JetBrains Mono, monospace",
                   }}
                 >
