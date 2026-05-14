@@ -36,6 +36,8 @@ interface AllTrucksLoad {
   trucks: TruckLoad[];
   totalPackages: number;
   unassigned: DistributionOrder[];
+  /** Customer-per-pallet cap actually used to fit the load. 3 = comfortable; >3 = relaxed under fleet pressure. */
+  effectiveCustCap: number;
 }
 
 // ─── Packing Algorithm ────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ const MAX_CUST_PER_PALLET = 3;
 
 type CustomerEntry = { custName: string; cdes: string; packages: number; stopOrder: number; ordNames: string[] };
 
-function packOneTruck(customers: CustomerEntry[]): { pallets: PalletSlot[]; overflow: CustomerEntry[] } {
+function packOneTruck(customers: CustomerEntry[], custCap = MAX_CUST_PER_PALLET): { pallets: PalletSlot[]; overflow: CustomerEntry[] } {
   const pallets: PalletSlot[] = [];
   for (let row = 0; row < 5; row++)
     for (let col = 0; col < 2; col++)
@@ -66,7 +68,7 @@ function packOneTruck(customers: CustomerEntry[]): { pallets: PalletSlot[]; over
     while (remaining > 0) {
       if (palletIdx < 0) break;
       const pallet = pallets[palletIdx];
-      const canAdd = pallet.customers.length < MAX_CUST_PER_PALLET ||
+      const canAdd = pallet.customers.length < custCap ||
         pallet.customers.some((c) => c.custName === cust.custName);
       const space = MAX_PKG_PER_PALLET - pallet.totalPackages;
 
@@ -87,7 +89,108 @@ function packOneTruck(customers: CustomerEntry[]): { pallets: PalletSlot[]; over
   return { pallets: pallets.filter((p) => p.customers.length > 0), overflow };
 }
 
-function packAllTrucks(orders: DistributionOrder[]): AllTrucksLoad {
+// After the main greedy pass, sweep the overflow customers and slot them into any
+// existing pallet that still has room (or open a fresh empty slot inside an already-used
+// truck). This is what lets the redistribute step actually use the visible empty space.
+function redistributeOverflow(
+  trucks: TruckLoad[],
+  overflow: CustomerEntry[],
+  custCap = MAX_CUST_PER_PALLET
+): CustomerEntry[] {
+  const stillOverflow: CustomerEntry[] = [];
+
+  for (const cust of overflow) {
+    let remaining = cust.packages;
+
+    // Pass 1 — fit into existing pallets that still have headroom
+    for (const truck of trucks) {
+      if (remaining === 0) break;
+      const sortedPallets = [...truck.pallets].sort((a, b) => a.totalPackages - b.totalPackages);
+      for (const pallet of sortedPallets) {
+        if (remaining === 0) break;
+        const sameCust = pallet.customers.find((c) => c.custName === cust.custName);
+        const canAdd = sameCust !== undefined || pallet.customers.length < custCap;
+        const space = MAX_PKG_PER_PALLET - pallet.totalPackages;
+        if (!canAdd || space <= 0) continue;
+        const placing = Math.min(remaining, space);
+        if (sameCust) {
+          sameCust.packages += placing;
+          for (const n of cust.ordNames) {
+            if (!sameCust.ordNames.includes(n)) sameCust.ordNames.push(n);
+          }
+        } else {
+          pallet.customers.push({ ...cust, packages: placing, ordNames: [...cust.ordNames] });
+        }
+        pallet.totalPackages += placing;
+        remaining -= placing;
+      }
+    }
+
+    // Pass 2 — open a new pallet inside one of the trucks' unused slots
+    if (remaining > 0) {
+      for (const truck of trucks) {
+        if (remaining === 0) break;
+        const usedSlots = new Set(truck.pallets.map((p) => `${p.row}-${p.col}`));
+        for (let row = 0; row < 5 && remaining > 0; row++) {
+          for (let col = 0; col < 2 && remaining > 0; col++) {
+            const key = `${row}-${col}`;
+            if (usedSlots.has(key)) continue;
+            const placing = Math.min(remaining, MAX_PKG_PER_PALLET);
+            truck.pallets.push({
+              row, col,
+              customers: [{ ...cust, packages: placing, ordNames: [...cust.ordNames] }],
+              totalPackages: placing,
+            });
+            usedSlots.add(key);
+            remaining -= placing;
+          }
+        }
+      }
+    }
+
+    if (remaining > 0) stillOverflow.push({ ...cust, packages: remaining });
+  }
+
+  return stillOverflow;
+}
+
+const MAX_TRUCKS_UNLIMITED = 100;
+
+// Single packing attempt at a given customer-per-pallet cap.
+function packAttempt(
+  custList: CustomerEntry[],
+  usableTruckNumbers: number[] | null,
+  custCap: number
+): { trucks: TruckLoad[]; overflow: CustomerEntry[] } {
+  let remaining = [...custList];
+  const trucks: TruckLoad[] = [];
+  const numbers = usableTruckNumbers ? [...usableTruckNumbers] : null;
+  let nextSeq = 1;
+
+  while (remaining.length > 0) {
+    if (numbers) {
+      if (numbers.length === 0) break;
+    } else if (nextSeq > MAX_TRUCKS_UNLIMITED) {
+      break;
+    }
+    const truckNumber = numbers ? numbers.shift()! : nextSeq++;
+    const beforePkg = remaining.reduce((s, c) => s + c.packages, 0);
+    const { pallets, overflow } = packOneTruck(remaining, custCap);
+    const afterPkg = overflow.reduce((s, c) => s + c.packages, 0);
+    trucks.push({ truckNumber, pallets });
+    if (afterPkg >= beforePkg) break;
+    remaining = overflow;
+  }
+
+  // Mop-up: fit leftover into any gaps in already-allocated trucks.
+  const finalOverflow = redistributeOverflow(trucks, remaining, custCap);
+  return { trucks, overflow: finalOverflow };
+}
+
+function packAllTrucks(
+  orders: DistributionOrder[],
+  usableTruckNumbers?: number[]
+): AllTrucksLoad {
   // Aggregate packages per customer-stop
   const custMap = new Map<string, CustomerEntry>();
   for (const o of orders) {
@@ -103,21 +206,31 @@ function packAllTrucks(orders: DistributionOrder[]): AllTrucksLoad {
   }
 
   const totalPackages = Array.from(custMap.values()).reduce((s, c) => s + c.packages, 0);
-  let remaining = Array.from(custMap.values()).sort((a, b) => a.stopOrder - b.stopOrder);
-  const trucks: TruckLoad[] = [];
+  const sortedCustomers = Array.from(custMap.values()).sort((a, b) => a.stopOrder - b.stopOrder);
+  const truckNumbers = usableTruckNumbers ?? null;
 
-  while (remaining.length > 0) {
-    const { pallets, overflow } = packOneTruck(remaining);
-    trucks.push({ truckNumber: trucks.length + 1, pallets });
-    if (overflow.length === remaining.length) break; // safety: no progress
-    remaining = overflow;
+  // First attempt: comfortable cap (3 cust/pallet).
+  let bestCap = MAX_CUST_PER_PALLET;
+  let best = packAttempt(sortedCustomers, truckNumbers, bestCap);
+
+  // If the fleet is constrained AND we still have overflow, escalate the cap so
+  // the algorithm uses the pallets' empty space (up to 10, effectively no cap).
+  if (truckNumbers && best.overflow.length > 0) {
+    for (let cap = MAX_CUST_PER_PALLET + 1; cap <= 10; cap++) {
+      const next = packAttempt(sortedCustomers, truckNumbers, cap);
+      if (next.overflow.length < best.overflow.length) {
+        best = next;
+        bestCap = cap;
+      }
+      if (next.overflow.length === 0) break;
+    }
   }
 
   const unassigned = orders.filter((o) =>
-    remaining.some((r) => r.custName === o.CUSTNAME)
+    best.overflow.some((r) => r.custName === o.CUSTNAME && r.ordNames.includes(o.ORDNAME))
   );
 
-  return { trucks, totalPackages, unassigned };
+  return { trucks: best.trucks, totalPackages, unassigned, effectiveCustCap: bestCap };
 }
 
 // ─── Order item lines (fetched on pallet click) ───────────────────────────────
@@ -494,7 +607,34 @@ export default function DistributionPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const [orders, setOrders] = useState<DistributionOrder[]>([]);
-  const [allTrucks, setAllTrucks] = useState<AllTrucksLoad | null>(null);
+  // Pending: what the user has checked in the dropdown (not yet applied to packing).
+  const [unavailableTrucks, setUnavailableTrucks] = useState<Set<number>>(new Set());
+  // Applied: what the packer is actually using. Updated when the user clicks Rearrange.
+  const [appliedUnavailable, setAppliedUnavailable] = useState<Set<number>>(new Set());
+  const [fleetDropdownOpen, setFleetDropdownOpen] = useState(false);
+
+  // Baseline: one pack with no constraint — determines the "natural" truck count for the day.
+  const baselineCount = useMemo(
+    () => (orders.length === 0 ? 0 : packAllTrucks(orders).trucks.length),
+    [orders]
+  );
+
+  // Effective load uses the APPLIED set. Pending changes don't repack until the user clicks Rearrange.
+  const allTrucks = useMemo<AllTrucksLoad | null>(() => {
+    if (orders.length === 0) return null;
+    if (appliedUnavailable.size === 0) return packAllTrucks(orders);
+    const usable: number[] = [];
+    for (let n = 1; n <= baselineCount; n++) {
+      if (!appliedUnavailable.has(n)) usable.push(n);
+    }
+    return packAllTrucks(orders, usable);
+  }, [orders, appliedUnavailable, baselineCount]);
+
+  const hasPendingFleetChanges = useMemo(() => {
+    if (unavailableTrucks.size !== appliedUnavailable.size) return true;
+    for (const n of unavailableTrucks) if (!appliedUnavailable.has(n)) return true;
+    return false;
+  }, [unavailableTrucks, appliedUnavailable]);
   const [selectedTruck, setSelectedTruck] = useState(0); // index into allTrucks.trucks
   const [truckInfoVisible, setTruckInfoVisible] = useState(false);
   const [colorMap, setColorMap] = useState<Map<string, string>>(new Map());
@@ -570,7 +710,9 @@ export default function DistributionPage() {
     setLoading(true);
     setError("");
     setOrders([]);
-    setAllTrucks(null);
+    setUnavailableTrucks(new Set());
+    setAppliedUnavailable(new Set());
+    setFleetDropdownOpen(false);
     setSelectedTruck(0);
     setSelectedPallet(null);
     fetchedRef.current = true;
@@ -585,9 +727,6 @@ export default function DistributionPage() {
 
       if (fetchedOrders.length === 0) return;
 
-      const load = packAllTrucks(fetchedOrders);
-      setAllTrucks(load);
-
       const custNames = [...new Set(fetchedOrders.map((o) => o.CUSTNAME))];
       const cm = new Map<string, string>();
       custNames.forEach((name, i) => cm.set(name, COLORS[i % COLORS.length]));
@@ -598,6 +737,13 @@ export default function DistributionPage() {
       setLoading(false);
     }
   }, []);
+
+  // Clamp selectedTruck when the truck list shrinks
+  useEffect(() => {
+    if (allTrucks && selectedTruck >= allTrucks.trucks.length) {
+      setSelectedTruck(Math.max(0, allTrucks.trucks.length - 1));
+    }
+  }, [allTrucks, selectedTruck]);
 
   const currentTruck = allTrucks?.trucks[selectedTruck] ?? null;
   const currentTruckConfig: TruckConfig | null = currentTruck
@@ -732,7 +878,7 @@ export default function DistributionPage() {
 
         {orders.length > 0 && (
           <div className="flex items-center gap-2 mr-auto flex-wrap">
-            {/* Truck selector */}
+            {/* Truck selector — simple < N / N > pager (the dropdown handles availability separately) */}
             {allTrucks && allTrucks.trucks.length > 1 && (
               <div className="flex items-center gap-1 border rounded px-1" style={{ borderColor: "var(--border)" }}>
                 <button
@@ -741,30 +887,18 @@ export default function DistributionPage() {
                   className="px-1.5 py-1 text-sm transition-opacity"
                   style={{ color: selectedTruck === 0 ? "var(--border-muted)" : "var(--text-mid)" }}
                 >‹</button>
-                {allTrucks.trucks.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      if (selectedTruck === i) {
-                        setTruckInfoVisible((v) => !v);
-                      } else {
-                        setSelectedTruck(i);
-                        setSelectedPallet(null);
-                        setTruckInfoVisible(true);
-                      }
-                    }}
-                    className="px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1"
-                    style={{
-                      background: selectedTruck === i ? "rgba(59,130,246,0.2)" : "transparent",
-                      color: selectedTruck === i ? "var(--blue-light)" : "var(--text-muted)",
-                    }}
-                  >
-                    🚛 {i + 1}
-                    {selectedTruck === i && (
-                      <span style={{ color: truckInfoVisible ? "var(--blue-light)" : "var(--border-muted)", fontSize: "10px" }}>ℹ</span>
-                    )}
-                  </button>
-                ))}
+                <button
+                  onClick={() => setTruckInfoVisible((v) => !v)}
+                  className="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1"
+                  style={{
+                    background: "rgba(59,130,246,0.2)",
+                    color: "var(--blue-light)",
+                  }}
+                  title="לחץ לפרטי המשאית"
+                >
+                  🚛 {currentTruck?.truckNumber ?? "?"} ({selectedTruck + 1}/{allTrucks.trucks.length})
+                  <span style={{ color: truckInfoVisible ? "var(--blue-light)" : "var(--border-muted)", fontSize: "10px" }}>ℹ</span>
+                </button>
                 <button
                   onClick={() => { setSelectedTruck((t) => Math.min(allTrucks.trucks.length - 1, t + 1)); setSelectedPallet(null); setTruckInfoVisible(false); }}
                   disabled={selectedTruck === allTrucks.trucks.length - 1}
@@ -772,6 +906,116 @@ export default function DistributionPage() {
                   style={{ color: selectedTruck === allTrucks.trucks.length - 1 ? "var(--border-muted)" : "var(--text-mid)" }}
                 >›</button>
               </div>
+            )}
+
+            {/* Fleet availability dropdown */}
+            {baselineCount > 1 && (
+              <div className="relative">
+                <button
+                  onClick={() => setFleetDropdownOpen((v) => !v)}
+                  className="px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5"
+                  style={{
+                    background: unavailableTrucks.size > 0 ? "rgba(239,68,68,0.12)" : "transparent",
+                    border: `1px solid ${unavailableTrucks.size > 0 ? "rgba(239,68,68,0.4)" : "var(--border)"}`,
+                    color: unavailableTrucks.size > 0 ? "var(--danger-light)" : "var(--text-mid)",
+                    cursor: "pointer",
+                  }}
+                  title="ניהול זמינות צי"
+                >
+                  זמינות צי
+                  {unavailableTrucks.size > 0 && (
+                    <span style={{ fontWeight: 700 }}>
+                      ({baselineCount - unavailableTrucks.size}/{baselineCount})
+                    </span>
+                  )}
+                  <span style={{ fontSize: "9px" }}>▼</span>
+                </button>
+                {fleetDropdownOpen && (
+                  <div
+                    className="absolute z-50 mt-1 rounded shadow-lg"
+                    style={{
+                      top: "100%",
+                      right: 0,
+                      width: "220px",
+                      maxHeight: "320px",
+                      overflowY: "auto",
+                      background: "var(--overlay-bg-strong)",
+                      border: "1px solid var(--border)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <div
+                      className="px-3 py-2 text-xs font-semibold flex items-center justify-between"
+                      style={{ borderBottom: "1px solid var(--border)", color: "var(--text-mid)", background: "var(--hover-overlay)" }}
+                    >
+                      <span>סמן משאית כלא זמינה</span>
+                      <button
+                        onClick={() => setFleetDropdownOpen(false)}
+                        style={{ color: "var(--text-muted)", fontSize: "14px" }}
+                      >×</button>
+                    </div>
+                    <div className="p-1.5 space-y-0.5">
+                      {Array.from({ length: baselineCount }, (_, i) => i + 1).map((num) => {
+                        const isOut = unavailableTrucks.has(num);
+                        const cfg = getTruckConfig(num);
+                        return (
+                          <label
+                            key={num}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors"
+                            style={{
+                              background: isOut ? "rgba(239,68,68,0.1)" : "transparent",
+                              color: isOut ? "var(--danger-light)" : "var(--text-mid)",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isOut}
+                              onChange={() =>
+                                setUnavailableTrucks((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(num)) next.delete(num); else next.add(num);
+                                  return next;
+                                })
+                              }
+                              style={{ accentColor: "var(--danger-light)", cursor: "pointer" }}
+                            />
+                            <span style={{ textDecoration: isOut ? "line-through" : "none" }}>
+                              🚛 משאית {num}
+                            </span>
+                            <span className="mr-auto" style={{ color: "var(--text-muted)", fontSize: "10px" }}>
+                              {cfg.driver}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Rearrange button — only enabled when there are pending fleet changes */}
+            {baselineCount > 1 && (
+              <button
+                onClick={() => {
+                  setAppliedUnavailable(new Set(unavailableTrucks));
+                  setSelectedTruck(0);
+                  setSelectedPallet(null);
+                  setFleetDropdownOpen(false);
+                }}
+                disabled={!hasPendingFleetChanges}
+                className="px-3 py-1 rounded text-xs font-medium transition-all"
+                style={{
+                  background: hasPendingFleetChanges ? "rgba(245,158,11,0.2)" : "transparent",
+                  border: `1px solid ${hasPendingFleetChanges ? "rgba(245,158,11,0.5)" : "var(--border-muted)"}`,
+                  color: hasPendingFleetChanges ? "var(--accent)" : "var(--text-muted)",
+                  cursor: hasPendingFleetChanges ? "pointer" : "not-allowed",
+                  opacity: hasPendingFleetChanges ? 1 : 0.55,
+                }}
+                title={hasPendingFleetChanges ? "החל את השינויים וסדר מחדש" : "אין שינויים בהמתנה"}
+              >
+                🔄 סדר מחדש
+              </button>
             )}
 
             {/* View tabs */}
@@ -826,6 +1070,32 @@ export default function DistributionPage() {
       {error && (
         <div className="mx-5 mt-3 px-4 py-2 rounded text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "var(--danger-light)" }}>
           {error}
+        </div>
+      )}
+
+      {/* ── Overflow banner: orders that don't fit when trucks are marked unavailable ── */}
+      {allTrucks && allTrucks.unassigned.length > 0 && appliedUnavailable.size > 0 && (
+        <div
+          className="mx-5 mt-3 px-4 py-2 rounded text-sm flex items-center gap-3"
+          style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "var(--danger-light)" }}
+        >
+          <span style={{ fontWeight: 600 }}>⚠ {allTrucks.unassigned.length} הזמנות לא נכנסו</span>
+          <span style={{ color: "var(--text-mid)" }}>
+            גם לאחר הרפיה של מגבלת לקוחות לפלטה עד {allTrucks.effectiveCustCap} — אין מספיק מקום ב-{baselineCount - appliedUnavailable.size} משאיות
+          </span>
+        </div>
+      )}
+
+      {/* Notice when algorithm relaxed the cust-per-pallet cap to fit */}
+      {allTrucks && allTrucks.effectiveCustCap > MAX_CUST_PER_PALLET && allTrucks.unassigned.length === 0 && appliedUnavailable.size > 0 && (
+        <div
+          className="mx-5 mt-3 px-4 py-2 rounded text-sm flex items-center gap-3"
+          style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", color: "var(--accent)" }}
+        >
+          <span style={{ fontWeight: 600 }}>ℹ הכל נכנס</span>
+          <span style={{ color: "var(--text-mid)" }}>
+            כדי להתאים את העומס לצי המצומצם, האלגוריתם הרפה את מגבלת הלקוחות לפלטה ל-{allTrucks.effectiveCustCap} (במקום {MAX_CUST_PER_PALLET})
+          </span>
         </div>
       )}
 
